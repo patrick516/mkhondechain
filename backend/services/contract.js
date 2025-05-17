@@ -1,27 +1,16 @@
 const { ethers } = require("ethers");
+const fs = require("fs");
 require("dotenv").config();
+
 const contractJson = require("../../smart-contract/artifacts/contracts/VillageSavings.sol/VillageSavings.json");
-
-// ✅ Set the provider and connect explicitly to localhost
 const provider = new ethers.providers.JsonRpcProvider(
-  process.env.BLOCKCHAIN_URL,
-  {
-    name: "localhost",
-    chainId: 31337, // default Hardhat network ID
-  }
+  process.env.BLOCKCHAIN_URL
 );
-
-// ✅ Connect wallet
-const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-
-// ✅ Load contract
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 const contract = new ethers.Contract(
   process.env.CONTRACT_ADDRESS,
   contractJson.abi,
-  signer
+  wallet
 );
-
-// Optional: attach signer if you plan to call .connect()
-contract.signer = signer;
 
 module.exports = contract;

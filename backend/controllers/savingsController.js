@@ -1,10 +1,15 @@
 const contract = require("../services/contract");
 const { ethers } = require("ethers");
-
 const userService = require("../services/userService");
 const at = require("../services/africasTalking");
+const {
+  initiateMobileCheckout,
+  sendMobileMoney,
+} = require("../utils/africasTalkingPayments");
 
+// ─────────────────────────────
 // WEB API METHODS (for frontend)
+// ─────────────────────────────
 
 exports.deposit = async (req, res) => {
   try {
@@ -22,7 +27,13 @@ exports.deposit = async (req, res) => {
   }
 };
 
-exports.getBalance = async (req, res) => {
+// Mobile Money: Save via Airtel/Mpamba (Mocked or Real)
+exports.depositViaMobileMoney = async (phoneNumber, amount) => {
+  const result = await initiateMobileCheckout(phoneNumber, amount);
+  return result;
+};
+
+exports.getBalanceForAPI = async (req, res) => {
   try {
     const address = req.params.address;
     const [totalSaved, loanAmount, loanDueDate, eligibleToBorrow] =
@@ -57,6 +68,12 @@ exports.borrow = async (req, res) => {
   }
 };
 
+// Mobile Money: Borrow via B2C (Mocked or Real)
+exports.sendLoanToMobile = async (phoneNumber, amount) => {
+  const result = await sendMobileMoney(phoneNumber, amount);
+  return result;
+};
+
 exports.repay = async (req, res) => {
   try {
     const { amount } = req.body;
@@ -73,7 +90,9 @@ exports.repay = async (req, res) => {
   }
 };
 
+// ─────────────────────────────
 // USSD METHODS (for /ussd route)
+// ─────────────────────────────
 
 exports.depositViaUSSD = async (phoneNumber, amount) => {
   const address = await userService.getWalletAddressByPhone(phoneNumber);
