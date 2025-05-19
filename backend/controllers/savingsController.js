@@ -174,3 +174,23 @@ exports.requestLoan = async (phoneNumber, amount) => {
   );
   await tx.wait();
 };
+
+exports.rejectLoan = async (req, res) => {
+  const { phoneNumber, amount, reason } = req.body;
+
+  try {
+    // Optional: log to DB if needed
+
+    const sendSms = require("../utils/africasTalkingSms");
+
+    await sendSms(
+      phoneNumber,
+      `Your loan request for ${amount} was rejected. Reason: ${reason}`
+    );
+
+    return res.status(200).json({ message: "Rejection handled and SMS sent" });
+  } catch (error) {
+    console.error("Reject loan failed:", error.message);
+    return res.status(500).json({ error: "Failed to send rejection" });
+  }
+};

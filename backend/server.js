@@ -8,6 +8,9 @@ const mongoose = require("mongoose");
 const routes = require("./routes/savings");
 const ussdRoutes = require("./routes/ussdRoutes"); // USSD routes
 const savingsRoutes = require("./routes/savings");
+const loanRoutes = require("./routes/loanRoutes");
+const memberRoutes = require("./routes/memberRoutes");
+const transactionRoutes = require("./routes/transactionRoutes");
 
 const app = express();
 app.use(cors());
@@ -21,9 +24,11 @@ mongoose
   .catch((err) => console.error(" MongoDB connection error:", err));
 
 // Use routes
-app.use("/api/savings", savingsRoutes); // Savings API routes (this is correct)
+app.use("/api/savings", savingsRoutes);
+app.use("/api/loans", loanRoutes);
+app.use("/api/members", memberRoutes);
+app.use("/api/transactions", transactionRoutes);
 
-// Use /ussd for the USSD logic
 app.use("/ussd", ussdRoutes);
 
 const PORT = process.env.PORT || 4000;
