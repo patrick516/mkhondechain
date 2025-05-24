@@ -18,9 +18,12 @@ router.post("/", async (req, res) => {
 
   try {
     // Check if user is registered
+    const Member = require("../models/memberModel"); // Make sure it's imported at the top
     const ethAddress = await userService.getWalletAddressByPhone(phoneNumber);
-    if (!ethAddress) {
-      response = `END Your number is not registered. Contact your group leader.`;
+    const member = await Member.findOne({ phone: phoneNumber });
+
+    if (!member || !ethAddress) {
+      response = `END You are not registered in the system. Contact your group leader.`;
       res.set("Content-Type", "text/plain");
       return res.send(response);
     }
@@ -47,12 +50,15 @@ router.post("/", async (req, res) => {
         if (!pin || pin.length < 4) {
           response = `END Invalid PIN. Please try again.`;
         } else {
-          await savingsController.depositViaUSSD(phoneNumber, amount);
-          response = `END Payment successful. MK${amount.toLocaleString()} saved.`;
+          try {
+            await savingsController.depositViaUSSD(phoneNumber, amount);
+            response = `END Payment successful. MK${amount.toLocaleString()} saved.`;
+          } catch (err) {
+            console.error("depositViaUSSD error:", err.message);
+            response = `END Deposit failed: ${err.message}`;
+          }
         }
       }
-
-      // VIEW BALANCE
     } else if (input[0] === "2") {
       const { totalSaved, loanAmount, eligibleToBorrow } =
         await savingsController.getBalanceForUSSD(phoneNumber);
@@ -80,11 +86,16 @@ router.post("/", async (req, res) => {
             borrowAmount / 1000
           )}. Save more first.`;
         } else {
+          //  Step 1: Request the loan (smart contract call)
+          await savingsController.requestLoan(phoneNumber, borrowAmount);
+
+          // Step 2: Disburse the loan via mobile money
           const loan = await savingsController.sendLoanToMobile(
             phoneNumber,
             borrowAmount
           );
 
+          // Step 3: Confirm result
           if (loan.entries && loan.entries[0].status === "Queued") {
             response = `END Loan of ${formatMK(
               borrowAmount / 1000

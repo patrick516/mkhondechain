@@ -45,7 +45,7 @@ exports.getMemberTransactions = async (req, res) => {
     const gender = member.gender?.toLowerCase() === "female" ? "she" : "he";
 
     let conclusion = "";
-    const interestRatio = totalInterest / (totalSavings || 1); // avoid divide by 0
+    const interestRatio = totalInterest / (totalSavings || 1);
 
     if (interestRatio >= 0.5) {
       conclusion = `${
@@ -87,6 +87,8 @@ exports.getMemberTransactions = async (req, res) => {
       .json({ error: "Failed to fetch member transactions" });
   }
 };
+
+// GET /api/transactions/summary
 exports.getTransactionSummary = async (req, res) => {
   try {
     const members = await Member.find();
@@ -141,5 +143,17 @@ exports.getTransactionSummary = async (req, res) => {
   } catch (err) {
     console.error("Failed to load summary:", err.message);
     res.status(500).json({ error: "Failed to load summary" });
+  }
+};
+
+// GET /api/transactions/total-savings
+exports.getTotalSavings = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ type: "save" });
+    const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+    res.status(200).json({ totalSavings: total });
+  } catch (err) {
+    console.error("Error getting total savings:", err.message);
+    res.status(500).json({ error: "Failed to get total savings" });
   }
 };

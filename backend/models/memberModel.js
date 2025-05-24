@@ -1,9 +1,19 @@
 const mongoose = require("mongoose");
 
 const memberSchema = new mongoose.Schema({
-  firstName: String,
-  surname: String,
-  gender: String,
+  firstName: {
+    type: String,
+    required: true,
+  },
+  surname: {
+    type: String,
+    required: true,
+  },
+  gender: {
+    type: String,
+    enum: ["Male", "Female"],
+    required: true,
+  },
   phone: {
     type: String,
     required: true,
@@ -11,7 +21,24 @@ const memberSchema = new mongoose.Schema({
   },
   ethAddress: {
     type: String,
-    default: null,
+    required: true,
+    unique: true,
+  },
+  savingsCount: {
+    type: Number,
+    default: 0,
+  },
+  borrowCount: {
+    type: Number,
+    default: 0,
+  },
+  totalSaved: {
+    type: Number,
+    default: 0, // in MK
+  },
+  totalBorrowed: {
+    type: Number,
+    default: 0, // in MK
   },
   createdAt: {
     type: Date,

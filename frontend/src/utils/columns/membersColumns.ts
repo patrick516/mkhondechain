@@ -8,6 +8,8 @@ export interface Member {
   gender: string;
   ethAddress: string;
   createdAt: string;
+  savingsCount: number;
+  borrowCount: number;
 }
 
 const columnHelper = createColumnHelper<Member>();
@@ -37,5 +39,27 @@ export const memberColumns = [
     header: "Joined",
     cell: (info) => new Date(info.getValue()).toLocaleDateString(),
     enableColumnFilter: false,
+  }),
+  columnHelper.accessor("savingsCount", {
+    header: "Saves",
+    enableColumnFilter: false,
+  }),
+  columnHelper.accessor("borrowCount", {
+    header: "Borrows",
+    enableColumnFilter: false,
+  }),
+  columnHelper.display({
+    id: "badge",
+    header: "Badge",
+    cell: (info) => {
+      const value = info.row.original;
+      const totalActivity =
+        (value.savingsCount || 0) + (value.borrowCount || 0);
+
+      if (totalActivity >= 20) return "🏅 Gold";
+      if (totalActivity >= 10) return "🥈 Silver";
+      if (totalActivity >= 5) return "🥉 Bronze";
+      return "🔘 New";
+    },
   }),
 ];

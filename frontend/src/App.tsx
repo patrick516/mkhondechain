@@ -4,6 +4,7 @@ import Dashboard from "@/pages/Dashboard";
 import Members from "@/pages/Members";
 import AddMember from "@/pages/AddMember";
 import Transactions from "@/pages/Transactions";
+import AddDeposit from "./pages/AddDeposit";
 
 import MemberTransactions from "@/pages/MemberTransactions";
 
@@ -16,6 +17,7 @@ function App() {
           <Route path="/members" element={<Members />} />
           <Route path="/add-member" element={<AddMember />} />
           <Route path="/transactions" element={<Transactions />} />
+          <Route path="/admin/deposit" element={<AddDeposit />} />
 
           <Route
             path="/members/:memberId/transactions"

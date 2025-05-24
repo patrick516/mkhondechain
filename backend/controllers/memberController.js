@@ -1,6 +1,7 @@
 const Member = require("../models/memberModel");
 const walletPool = require("../utils/walletPool");
 
+// GET all members
 exports.getAllMembers = async (req, res) => {
   try {
     const members = await Member.find().sort({ createdAt: -1 });
@@ -12,23 +13,30 @@ exports.getAllMembers = async (req, res) => {
 };
 
 // POST /api/members
-
 exports.addMember = async (req, res) => {
-  const { name, phone } = req.body;
+  const { firstName, surname, gender, phone, ethAddress } = req.body;
 
-  if (!name || !phone) {
-    return res.status(400).json({ error: "Name and phone are required" });
+  if (!firstName || !surname || !phone) {
+    return res
+      .status(400)
+      .json({ error: "First name, surname, and phone are required" });
   }
 
   try {
-    //  Pick the next wallet from the pool (round-robin or just use index 0 for now)
-    const memberCount = await Member.countDocuments();
-    const walletAddress = walletPool[memberCount % walletPool.length]; // rotate through the pool
+    // Auto-assign from pool if ethAddress not provided
+    const used = await Member.find().distinct("ethAddress");
+    const available = walletPool.find((addr) => !used.includes(addr));
+
+    if (!ethAddress && !available) {
+      return res.status(400).json({ error: "No wallet address available." });
+    }
 
     const newMember = await Member.create({
-      name,
+      firstName,
+      surname,
+      gender,
       phone,
-      ethAddress: walletAddress,
+      ethAddress: ethAddress || available,
     });
 
     res.status(201).json(newMember);

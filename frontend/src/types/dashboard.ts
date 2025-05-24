@@ -14,8 +14,16 @@ export interface ActivityItem {
 
 export interface LoanRequestItem {
   member: string;
+
   amount: string;
   date: string;
   status: "Pending" | "Approved" | "Rejected";
   rejectionReason?: string;
+}
+
+export interface MemberPayload {
+  firstName: string;
+  surname: string;
+  phone: string;
+  gender: string;
 }
