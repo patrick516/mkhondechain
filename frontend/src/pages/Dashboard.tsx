@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import StatsSection from "@/components/tables/StatsSection";
 import ActivityTable from "@/components/tables/ActivityTable";
 import LoanRequestTable from "@/components/tables/LoanRequestTable";
 import RejectModal from "@/components/tables/RejectModal";
 import axios from "@/api/axios";
 import toast from "react-hot-toast";
-import { fetchDashboardStats } from "@/api/dashboard";
+import { fetchDashboardStats, fetchRecentActivity } from "@/api/dashboard";
+import { fetchPendingLoanRequests } from "@/api/dashboard";
 
 import type {
   StatItem,
@@ -28,56 +30,53 @@ export default function Dashboard() {
     { label: "Outstanding Loans", value: "MK 0", bg: "bg-red-600" },
   ]);
 
-  const [activities, setActivities] = useState<ActivityItem[]>([
-    {
-      member: "Grace",
-      action: "Saved",
-      amount: "MK 2,000",
-      date: "2025-05-17",
-    },
-  ]);
-
-  const [loanRequests, setLoanRequests] = useState<LoanRequestItem[]>([
-    {
-      member: "Doreen",
-      amount: "MK 5,000",
-      date: "2025-05-16",
-      status: "Pending",
-    },
-    {
-      member: "Chikondi",
-      amount: "MK 3,000",
-      date: "2025-05-15",
-      status: "Pending",
-    },
-  ]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
-    fetchDashboardStats().then((summary) => {
-      console.log(" DASHBOARD SUMMARY:", summary);
+    fetchPendingLoanRequests().then(setLoanRequests).catch(console.error);
+    fetchRecentActivity()
+      .then(setActivities)
+      .catch((err) => {
+        console.error("Failed to fetch activity:", err.message);
+      });
+  }, []);
 
-      setStats([
-        {
-          label: "Total Saved",
-          value: `MK ${summary.totalSavings.toLocaleString()}`,
-          bg: "bg-accent",
-        },
-        {
-          label: "Total Borrowed",
-          value: `MK ${summary.totalBorrowed.toLocaleString()}`,
-        },
-        {
-          label: "Active Members",
-          value: `${summary.totalMembers} Members`,
-          bg: "bg-overlay",
-        },
-        {
-          label: "Outstanding Loans",
-          value: `MK ${summary.totalOwing.toLocaleString()}`,
-          bg: "bg-red-600",
-        },
-      ]);
-    });
+  const [loanRequests, setLoanRequests] = useState<LoanRequestItem[]>([]);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const summary = await fetchDashboardStats();
+        setStats([
+          {
+            label: "Total Saved",
+            value: `MK ${summary.totalSavings.toLocaleString()}`,
+            bg: "bg-accent",
+          },
+          {
+            label: "Total Borrowed",
+            value: `MK ${summary.totalBorrowed.toLocaleString()}`,
+          },
+          {
+            label: "Active Members",
+            value: `${summary.totalMembers} Members`,
+            bg: "bg-overlay",
+          },
+          {
+            label: "Outstanding Loans",
+            value: `MK ${summary.totalOwing.toLocaleString()}`,
+            bg: "bg-red-600",
+          },
+        ]);
+      } catch (err) {
+        console.error("Error refreshing dashboard stats:", err.message);
+      }
+    };
+
+    loadStats(); // initial load
+
+    const interval = setInterval(loadStats, 15000); // every 15s
+    return () => clearInterval(interval); // cleanup
   }, []);
 
   const handleApprove = (request: LoanRequestItem) => {
@@ -132,6 +131,49 @@ export default function Dashboard() {
 
     toast(`Loan rejected for ${item.member}`);
   };
+
+  useEffect(() => {
+    const socket = io(
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"
+    );
+
+    socket.on("connect", () => {
+      console.log("Connected to socket server");
+    });
+
+    socket.on("transaction:new", (data) => {
+      console.log("Real-time transaction received:", data);
+      fetchDashboardStats().then((summary) => {
+        setStats([
+          {
+            label: "Total Saved",
+            value: `MK ${summary.totalSavings.toLocaleString()}`,
+            bg: "bg-accent",
+          },
+          {
+            label: "Total Borrowed",
+            value: `MK ${summary.totalBorrowed.toLocaleString()}`,
+          },
+          {
+            label: "Active Members",
+            value: `${summary.totalMembers} Members`,
+            bg: "bg-overlay",
+          },
+          {
+            label: "Outstanding Loans",
+            value: `MK ${summary.totalOwing.toLocaleString()}`,
+            bg: "bg-red-600",
+          },
+        ]);
+      });
+
+      fetchRecentActivity().then(setActivities);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   return (
     <div>

@@ -101,7 +101,7 @@ exports.repay = async (req, res) => {
 // USSD-SPECIFIC METHODS
 // ─────────────────────────────
 
-exports.depositViaUSSD = async (phoneNumber, amount) => {
+exports.depositViaUSSD = async (phoneNumber, amount, req) => {
   const Member = require("../models/memberModel");
   const Transaction = require("../models/transactionModel");
 
@@ -114,6 +114,14 @@ exports.depositViaUSSD = async (phoneNumber, amount) => {
     });
 
     await tx.wait();
+    const io = req.app.get("io"); // Get the socket instance
+    io.emit("transaction:new", {
+      member: `${member.firstName} ${member.surname}`,
+      type: "Saved",
+      amount: `MK ${amount.toLocaleString()}`,
+      date: new Date().toLocaleDateString(),
+    });
+    console.log("📢 Socket emitted: transaction:new");
 
     const member = await Member.findOneAndUpdate(
       { phone: phoneNumber },
@@ -170,10 +178,27 @@ exports.canBorrow = async (phoneNumber, amount) => {
   return ethers.utils.parseEther(amount.toString()).lte(eligibleToBorrow);
 };
 
-exports.requestLoan = async (phoneNumber, amount) => {
+exports.requestLoan = async (phoneNumber, amount, req) => {
   const address = await userService.getWalletAddressByPhone(phoneNumber);
   if (!address) throw new Error("Wallet address not found");
 
+  const [, , , eligibleToBorrow] = await contract.getBalance(address);
+  const canBorrow = ethers.utils
+    .parseEther(amount.toString())
+    .lte(eligibleToBorrow);
+
+  if (!canBorrow) {
+    const reason = "Insufficient savings to qualify for this loan.";
+
+    await sendSms(
+      phoneNumber,
+      `MkhondeChain: Your loan request for MK${amount.toLocaleString()} was declined. Reason: ${reason}`
+    );
+
+    return; // Do not proceed with contract call
+  }
+
+  // proceed if eligible
   const tx = await contract.requestLoan(
     ethers.utils.parseEther(amount.toString()),
     30
@@ -194,6 +219,14 @@ exports.requestLoan = async (phoneNumber, amount) => {
     type: "borrow",
     amount,
     method: "USSD",
+  });
+
+  const io = req.app.get("io");
+  io.emit("transaction:new", {
+    member: `${member.firstName} ${member.surname}`,
+    type: "Borrowed",
+    amount: `MK ${amount.toLocaleString()}`,
+    date: new Date().toLocaleDateString(),
   });
 };
 

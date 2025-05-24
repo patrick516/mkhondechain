@@ -150,18 +150,10 @@ exports.getTransactionSummary = async (req, res) => {
 
 exports.getTotalSavings = async (req, res) => {
   try {
-    const result = await Member.aggregate([
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$totalSaved" },
-        },
-      },
-    ]);
+    const transactions = await Transaction.find({ type: "save" });
 
-    const total = result.length > 0 ? result[0].total : 0;
+    const total = transactions.reduce((sum, t) => sum + t.amount, 0);
 
-    console.log(" /transactions/total-savings:", total);
     res.status(200).json({ totalSavings: total });
   } catch (err) {
     console.error("Failed to get total savings:", err.message);
@@ -201,5 +193,54 @@ exports.getTotalOutstanding = async (req, res) => {
   } catch (err) {
     console.error("Error getting total owing:", err.message);
     res.status(500).json({ error: "Failed to get total owing" });
+  }
+};
+
+exports.getRecentActivity = async (req, res) => {
+  try {
+    const recent = await Transaction.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate("member");
+
+    const formatted = recent.map((tx) => ({
+      member: `${tx.member.firstName} ${tx.member.surname}`,
+      action:
+        tx.type === "save"
+          ? "Saved"
+          : tx.type === "borrow"
+          ? "Borrowed"
+          : tx.type === "repay"
+          ? "Repaid"
+          : "Other",
+      amount: `MK ${tx.amount.toLocaleString()}`,
+      date: new Date(tx.createdAt).toLocaleDateString(),
+    }));
+
+    res.status(200).json(formatted);
+  } catch (err) {
+    console.error("Failed to load recent activity:", err.message);
+    res.status(500).json({ error: "Failed to fetch recent activity" });
+  }
+};
+
+exports.getLoanRequests = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ type: "borrow" })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .populate("member");
+
+    const formatted = transactions.map((tx) => ({
+      member: `${tx.member.firstName} ${tx.member.surname}`,
+      amount: `MK ${tx.amount.toLocaleString()}`,
+      date: new Date(tx.createdAt).toISOString().slice(0, 10),
+      status: tx.status || "Pending",
+    }));
+
+    res.status(200).json(formatted);
+  } catch (err) {
+    console.error("Error fetching loan requests:", err.message);
+    res.status(500).json({ error: "Failed to fetch loan requests" });
   }
 };

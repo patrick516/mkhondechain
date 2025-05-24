@@ -51,7 +51,7 @@ router.post("/", async (req, res) => {
           response = `END Invalid PIN. Please try again.`;
         } else {
           try {
-            await savingsController.depositViaUSSD(phoneNumber, amount);
+            await savingsController.depositViaUSSD(phoneNumber, amount, req);
             response = `END Payment successful. MK${amount.toLocaleString()} saved.`;
           } catch (err) {
             console.error("depositViaUSSD error:", err.message);
@@ -82,12 +82,15 @@ router.post("/", async (req, res) => {
         );
 
         if (!canBorrow) {
-          response = `END You are not eligible to borrow ${formatMK(
-            borrowAmount / 1000
-          )}. Save more first.`;
+          await sendSms(
+            phoneNumber,
+            `Loan request declined: You are not eligible to borrow MK${borrowAmount.toLocaleString()}.\nSave more first.`
+          );
+
+          response = `END Loan request declined.\nReason: Save more first.`;
         } else {
           //  Step 1: Request the loan (smart contract call)
-          await savingsController.requestLoan(phoneNumber, borrowAmount);
+          await savingsController.requestLoan(phoneNumber, borrowAmount, req);
 
           // Step 2: Disburse the loan via mobile money
           const loan = await savingsController.sendLoanToMobile(
