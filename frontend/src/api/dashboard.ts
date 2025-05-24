@@ -8,7 +8,6 @@ export const fetchTotalMembers = async () => {
 
 export const fetchTotalSavings = async () => {
   const res = await axios.get("/transactions/total-savings");
-  console.log("/transactions/total-borrowed:", res.data);
   return res.data.totalSavings || 0;
 };
 
@@ -23,12 +22,17 @@ export const fetchTotalOutstanding = async () => {
 };
 
 export const fetchDashboardStats = async () => {
-  const members = await fetchTotalMembers();
+  const [members, savings, borrowed, owing] = await Promise.all([
+    fetchTotalMembers(),
+    fetchTotalSavings(),
+    fetchTotalBorrowed(),
+    fetchTotalOutstanding(),
+  ]);
 
   return {
     totalMembers: members,
-    totalSavings: 0,
-    totalBorrowed: 0,
-    totalOwing: 0,
+    totalSavings: savings || 0,
+    totalBorrowed: borrowed || 0,
+    totalOwing: owing || 0,
   };
 };

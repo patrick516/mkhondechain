@@ -147,13 +147,59 @@ exports.getTransactionSummary = async (req, res) => {
 };
 
 // GET /api/transactions/total-savings
+
 exports.getTotalSavings = async (req, res) => {
   try {
-    const transactions = await Transaction.find({ type: "save" });
-    const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const result = await Member.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$totalSaved" },
+        },
+      },
+    ]);
+
+    const total = result.length > 0 ? result[0].total : 0;
+
+    console.log(" /transactions/total-savings:", total);
     res.status(200).json({ totalSavings: total });
   } catch (err) {
-    console.error("Error getting total savings:", err.message);
+    console.error("Failed to get total savings:", err.message);
     res.status(500).json({ error: "Failed to get total savings" });
+  }
+};
+
+exports.getTotalBorrowed = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ type: "borrow" });
+    const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+    res.status(200).json({ totalBorrowed: total });
+  } catch (err) {
+    console.error("Error getting total borrowed:", err.message);
+    res.status(500).json({ error: "Failed to get total borrowed" });
+  }
+};
+
+exports.getTotalOutstanding = async (req, res) => {
+  try {
+    const members = await Member.find();
+
+    let totalOwing = 0;
+
+    for (const member of members) {
+      const transactions = await Transaction.find({ member: member._id });
+      const borrowed = transactions
+        .filter((t) => t.type === "borrow")
+        .reduce((sum, t) => sum + t.amount, 0);
+      const repaid = transactions
+        .filter((t) => t.type === "repay")
+        .reduce((sum, t) => sum + t.amount, 0);
+      totalOwing += borrowed - repaid;
+    }
+
+    res.status(200).json({ totalOwing });
+  } catch (err) {
+    console.error("Error getting total owing:", err.message);
+    res.status(500).json({ error: "Failed to get total owing" });
   }
 };

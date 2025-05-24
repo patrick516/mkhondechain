@@ -102,14 +102,8 @@ exports.repay = async (req, res) => {
 // ─────────────────────────────
 
 exports.depositViaUSSD = async (phoneNumber, amount) => {
-  const setting = await SystemSetting.findOne();
-
-  // Bypass check in development
-  if (process.env.NODE_ENV !== "development" && !setting?.savingWindowOpen) {
-    throw new Error(
-      "Group saving day is currently closed. Try again during the next saving cycle."
-    );
-  }
+  const Member = require("../models/memberModel");
+  const Transaction = require("../models/transactionModel");
 
   const address = await userService.getWalletAddressByPhone(phoneNumber);
   if (!address) throw new Error("Wallet address not found");
@@ -121,27 +115,25 @@ exports.depositViaUSSD = async (phoneNumber, amount) => {
 
     await tx.wait();
 
-    // Update exact member row
-    await Member.findOneAndUpdate(
+    const member = await Member.findOneAndUpdate(
       { phone: phoneNumber },
-      {
-        $inc: {
-          savingsCount: 1,
-          totalSaved: amount, // make sure your schema has this
-        },
-        $setOnInsert: {
-          ethAddress: address,
-        },
-      },
-      { upsert: false }
+      { $inc: { savingsCount: 1 } },
+      { new: true }
     );
+
+    await Transaction.create({
+      member: member._id,
+      type: "save",
+      amount,
+      method: "USSD",
+    });
 
     await sendSms(
       phoneNumber,
       `MkhondeChain: You’ve successfully saved MK${amount.toLocaleString()}.`
     );
 
-    console.log(`Deposit for ${phoneNumber} recorded`);
+    console.log("Deposit via USSD successful");
   } catch (err) {
     console.error("USSD deposit error:", err.message);
     throw new Error("Deposit failed");
@@ -188,15 +180,21 @@ exports.requestLoan = async (phoneNumber, amount) => {
   );
   await tx.wait();
 
-  await Member.findOneAndUpdate(
+  const Member = require("../models/memberModel");
+  const Transaction = require("../models/transactionModel");
+
+  const member = await Member.findOneAndUpdate(
     { phone: phoneNumber },
-    {
-      $inc: {
-        borrowCount: 1,
-        totalBorrowed: amount, //  now tracks total MK borrowed
-      },
-    }
+    { $inc: { borrowCount: 1 } },
+    { new: true }
   );
+
+  await Transaction.create({
+    member: member._id,
+    type: "borrow",
+    amount,
+    method: "USSD",
+  });
 };
 
 exports.rejectLoan = async (req, res) => {

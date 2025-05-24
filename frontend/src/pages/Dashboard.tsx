@@ -54,7 +54,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardStats().then((summary) => {
-      console.log(" DASHBOARD SUMMARY:", summary); // 🧠 Should show totalMembers: 8
+      console.log(" DASHBOARD SUMMARY:", summary);
 
       setStats([
         {
