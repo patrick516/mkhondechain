@@ -163,3 +163,28 @@ cron.schedule("0 1 * * *", async () => {
     }
   }
 });
+
+// ─────────────────────────────
+// JOB 3: Monthly Audit Transparency Day SMS
+// ─────────────────────────────
+
+// "* * * * *",
+
+cron.schedule("0 10 28 * *", async () => {
+  console.log("[Audit Day SMS Job] Running...");
+
+  const members = await Member.find({ phone: { $exists: true } });
+
+  const message = `MkhondeChain Notice:\nToday is Audit Transparency Day.\nVisit your group leader to view your savings & loan record.\nSmartphone? Tap here: https://mkhondechain.app/audit-log`;
+
+  for (const member of members) {
+    try {
+      await sendSMS(member.phone, message);
+      console.log(`SMS sent to ${member.phone}`);
+    } catch (err) {
+      console.error(`Failed to send to ${member.phone}:`, err.message);
+    }
+  }
+
+  console.log("All Audit Day SMS sent.");
+});

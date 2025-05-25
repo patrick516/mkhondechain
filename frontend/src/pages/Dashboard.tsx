@@ -20,8 +20,6 @@ export default function Dashboard() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingRequest, setRejectingRequest] =
     useState<LoanRequestItem | null>(null);
-  const [confirmingRequest, setConfirmingRequest] =
-    useState<LoanRequestItem | null>(null);
 
   const [stats, setStats] = useState<StatItem[]>([
     { label: "Total Saved", value: "MK 0", bg: "bg-accent" },
@@ -170,6 +168,30 @@ export default function Dashboard() {
       fetchRecentActivity().then(setActivities);
     });
 
+    // Listen for real-time loan requests
+    socket.on("loan:request", async (request) => {
+      console.log("New loan request received via socket:", request);
+
+      const numericAmount = Number(request.amount.replace(/[^\d]/g, ""));
+
+      try {
+        const res = await axios.get(
+          `/contract/eligible-to-borrow/${request.wallet}`
+        );
+        const eligibleMWK = res.data.eligibleMWK;
+
+        if (numericAmount <= eligibleMWK) {
+          console.log("Auto-approving loan for", request.member);
+          handleApprove(request);
+        } else {
+          console.log("Auto-rejecting loan for", request.member);
+          handleReject(request, "Exceeds 80% of allowed savings");
+        }
+      } catch (err) {
+        console.error("Failed to auto-process loan request:", err.message);
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -184,14 +206,18 @@ export default function Dashboard() {
       <h2 className="mt-10 mb-4 text-lg font-semibold">
         Pending Loan Requests
       </h2>
-      <LoanRequestTable
+      {/* <LoanRequestTable
         data={loanRequests}
         onApprove={(request) => setConfirmingRequest(request)}
         onReject={(item) => {
           setRejectingRequest(item);
           setShowRejectModal(true);
         }}
-      />
+      /> */}
+      <p className="text-gray-600">
+        All loans are automatically approved or rejected based on blockchain
+        eligibility.
+      </p>
 
       <h2 className="mt-10 mb-4 text-lg font-semibold">Recent Activity</h2>
       <ActivityTable data={activities} />
@@ -206,39 +232,6 @@ export default function Dashboard() {
           if (rejectingRequest) handleReject(rejectingRequest, reason);
         }}
       />
-
-      {confirmingRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md p-6 bg-white rounded shadow-lg">
-            <h2 className="mb-4 text-lg font-semibold">Confirm Approval</h2>
-            <p className="mb-4 text-sm text-gray-700">
-              You are about to send <strong>{confirmingRequest.amount}</strong>{" "}
-              to <strong>{confirmingRequest.member}</strong>. This amount will
-              be deducted from the group wallet.
-              <br />
-              <br />
-              Do you want to proceed?
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                className="px-4 py-2 text-gray-600 border rounded"
-                onClick={() => setConfirmingRequest(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 text-white rounded bg-primary"
-                onClick={() => {
-                  handleApprove(confirmingRequest);
-                  setConfirmingRequest(null);
-                }}
-              >
-                Yes, Approve
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

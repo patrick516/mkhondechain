@@ -11,7 +11,7 @@ const sendSms = async (phone, message) => {
     const result = await at.SMS.send({
       to: [phone],
       message,
-      from: "AFRICASTKNG", // use "Mkhonde" if verified
+      // from: "AFRICASTKNG", // use "Mkhonde" if verified
     });
     console.log("SMS sent:", result);
   } catch (error) {

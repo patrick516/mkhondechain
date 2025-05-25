@@ -27,3 +27,15 @@ export interface MemberPayload {
   phone: string;
   gender: string;
 }
+
+export interface AuditLogItem {
+  action: string;
+  performedBy: string;
+  targetMember: string;
+  details: {
+    amount: string;
+    method: string;
+    wallet: string;
+  };
+  createdAt: string;
+}

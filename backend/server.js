@@ -16,6 +16,8 @@ const memberRoutes = require("./routes/memberRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const contractRoute = require("./routes/contractRoute");
+const auditRoute = require("./routes/auditRoute");
 
 const app = express();
 const server = http.createServer(app);
@@ -57,6 +59,8 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/ussd", ussdRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/contract", contractRoute);
+app.use("/audit", auditRoute);
 
 // Start server
 const PORT = process.env.PORT || 4000;
