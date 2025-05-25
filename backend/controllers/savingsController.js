@@ -8,6 +8,7 @@ const {
 const sendSms = require("../utils/africasTalkingSms");
 const SystemSetting = require("../models/systemSettingModel");
 const Member = require("../models/memberModel");
+const Transaction = require("../models/transactionModel");
 
 // ─────────────────────────────
 // WEB API METHODS (Admin Dashboard / Frontend)
@@ -114,14 +115,6 @@ exports.depositViaUSSD = async (phoneNumber, amount, req) => {
     });
 
     await tx.wait();
-    const io = req.app.get("io"); // Get the socket instance
-    io.emit("transaction:new", {
-      member: `${member.firstName} ${member.surname}`,
-      type: "Saved",
-      amount: `MK ${amount.toLocaleString()}`,
-      date: new Date().toLocaleDateString(),
-    });
-    console.log("📢 Socket emitted: transaction:new");
 
     const member = await Member.findOneAndUpdate(
       { phone: phoneNumber },
@@ -141,6 +134,15 @@ exports.depositViaUSSD = async (phoneNumber, amount, req) => {
       `MkhondeChain: You’ve successfully saved MK${amount.toLocaleString()}.`
     );
 
+    const io = req.app.get("io");
+    io.emit("transaction:new", {
+      member: `${member.firstName} ${member.surname}`,
+      type: "Saved",
+      amount: `MK ${amount.toLocaleString()}`,
+      date: new Date().toLocaleDateString(),
+    });
+
+    console.log("Socket emitted: transaction:new");
     console.log("Deposit via USSD successful");
   } catch (err) {
     console.error("USSD deposit error:", err.message);
@@ -150,10 +152,17 @@ exports.depositViaUSSD = async (phoneNumber, amount, req) => {
 
 exports.getBalanceForUSSD = async (phoneNumber) => {
   const address = await userService.getWalletAddressByPhone(phoneNumber);
-  if (!address) throw new Error("Wallet address not found");
+  console.log("📲 USSD phone:", phoneNumber);
+  console.log("🔗 Wallet address from DB:", address);
 
   const [totalSaved, loanAmount, loanDueDate, eligibleToBorrow] =
     await contract.getBalance(address);
+
+  console.log("💰 totalSaved (ETH):", ethers.utils.formatEther(totalSaved));
+  console.log(
+    "✅ eligibleToBorrow (ETH):",
+    ethers.utils.formatEther(eligibleToBorrow)
+  );
 
   return {
     display: `💰 Saved: MK${(
@@ -175,38 +184,38 @@ exports.canBorrow = async (phoneNumber, amount) => {
   if (!address) throw new Error("Wallet address not found");
 
   const [, , , eligibleToBorrow] = await contract.getBalance(address);
-  return ethers.utils.parseEther(amount.toString()).lte(eligibleToBorrow);
+  const amountInEth = ethers.utils.parseEther((amount / 1000).toString());
+  return amountInEth.lte(eligibleToBorrow);
 };
 
 exports.requestLoan = async (phoneNumber, amount, req) => {
   const address = await userService.getWalletAddressByPhone(phoneNumber);
   if (!address) throw new Error("Wallet address not found");
 
-  const [, , , eligibleToBorrow] = await contract.getBalance(address);
-  const canBorrow = ethers.utils
-    .parseEther(amount.toString())
-    .lte(eligibleToBorrow);
+  const [totalSaved] = await contract.getBalance(address);
+  const maxAllowed = totalSaved.mul(80).div(100);
+  const amountInWei = ethers.utils.parseEther((amount / 1000).toString());
 
-  if (!canBorrow) {
-    const reason = "Insufficient savings to qualify for this loan.";
-
+  if (amountInWei.gt(maxAllowed)) {
+    const maxMK = parseFloat(ethers.utils.formatEther(maxAllowed)) * 1000;
     await sendSms(
       phoneNumber,
-      `MkhondeChain: Your loan request for MK${amount.toLocaleString()} was declined. Reason: ${reason}`
+      `Loan exceeds 80%. Max allowed: MK${Math.floor(maxMK).toLocaleString()}`
     );
-
-    return; // Do not proceed with contract call
+    return;
   }
 
-  // proceed if eligible
-  const tx = await contract.requestLoan(
-    ethers.utils.parseEther(amount.toString()),
-    30
-  );
-  await tx.wait();
-
-  const Member = require("../models/memberModel");
-  const Transaction = require("../models/transactionModel");
+  try {
+    const tx = await contract.requestLoanFor(address, amountInWei, 30); // ✅ backend-usable version
+    await tx.wait();
+  } catch (error) {
+    console.error("❌ Contract reverted:", error.message);
+    await sendSms(
+      phoneNumber,
+      `Loan failed. Reason: ${error.reason || "exceeds limit"}`
+    );
+    return;
+  }
 
   const member = await Member.findOneAndUpdate(
     { phone: phoneNumber },
@@ -226,8 +235,10 @@ exports.requestLoan = async (phoneNumber, amount, req) => {
     member: `${member.firstName} ${member.surname}`,
     type: "Borrowed",
     amount: `MK ${amount.toLocaleString()}`,
-    date: new Date().toLocaleDateString(),
+    date: new Date().toISOString(),
   });
+
+  console.log(" Loan saved and emitted");
 };
 
 exports.rejectLoan = async (req, res) => {

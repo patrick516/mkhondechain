@@ -214,7 +214,7 @@ exports.getRecentActivity = async (req, res) => {
           ? "Repaid"
           : "Other",
       amount: `MK ${tx.amount.toLocaleString()}`,
-      date: new Date(tx.createdAt).toLocaleDateString(),
+      date: tx.createdAt.toISOString(),
     }));
 
     res.status(200).json(formatted);

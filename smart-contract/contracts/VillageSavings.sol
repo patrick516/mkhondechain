@@ -41,18 +41,32 @@ function depositFor(address member) external payable {
 }
 
 
-    // Request loan
-    function requestLoan(uint amount, uint daysToRepay) external {
-        Member storage m = members[msg.sender];
+   // Request loan (for frontend or DApp users)
+function requestLoan(uint amount, uint daysToRepay) external {
+    Member storage m = members[msg.sender];
 
-        require(m.loanAmount == 0, "Repay your previous loan first");
-        require(amount <= (m.totalSaved * 80) / 100, "Loan exceeds 80% of savings");
+    require(m.loanAmount == 0, "Repay your previous loan first");
+    require(amount <= (m.totalSaved * 80) / 100, "Loan exceeds 80% of savings");
 
-        m.loanAmount = amount;
-        m.loanDueDate = block.timestamp + (daysToRepay * 1 days);
+    m.loanAmount = amount;
+    m.loanDueDate = block.timestamp + (daysToRepay * 1 days);
 
-        payable(msg.sender).transfer(amount);
-    }
+    payable(msg.sender).transfer(amount);
+}
+
+// Request loan on behalf of someone (used by backend)
+function requestLoanFor(address member, uint amount, uint daysToRepay) external {
+    Member storage m = members[member];
+
+    require(m.loanAmount == 0, "Repay your previous loan first");
+    require(amount <= (m.totalSaved * 80) / 100, "Loan exceeds 80% of savings");
+
+    m.loanAmount = amount;
+    m.loanDueDate = block.timestamp + (daysToRepay * 1 days);
+
+    payable(member).transfer(amount);
+}
+
 
     // Repay loan
     function repayLoan() external payable {

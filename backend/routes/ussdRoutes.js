@@ -2,7 +2,9 @@ const express = require("express");
 const router = express.Router();
 const savingsController = require("../controllers/savingsController");
 const userService = require("../services/userService");
+const sendSms = require("../utils/africasTalkingSms");
 const { ethers } = require("ethers");
+const Member = require("../models/memberModel");
 
 router.post("/", async (req, res) => {
   console.log("USSD request received!");
@@ -17,8 +19,6 @@ router.post("/", async (req, res) => {
     `MK${parseFloat(amountEth * 1000).toLocaleString()}`;
 
   try {
-    // Check if user is registered
-    const Member = require("../models/memberModel"); // Make sure it's imported at the top
     const ethAddress = await userService.getWalletAddressByPhone(phoneNumber);
     const member = await Member.findOne({ phone: phoneNumber });
 
@@ -30,9 +30,9 @@ router.post("/", async (req, res) => {
 
     // MAIN MENU
     if (text === "") {
-      response = `CON Welcome to MkhondeChain\n1. Save Money\n2. View Balance\n3. Borrow Money`;
+      response = `CON Welcome to MkhondeChain\n1. Save Money\n2. Borrow Money\n3. View Balance`;
 
-      // SAVE MONEY with Mocked PIN
+      // SAVE MONEY
     } else if (input[0] === "1") {
       if (level === 1) {
         response = `CON Enter amount to save (e.g. 2000):`;
@@ -41,7 +41,7 @@ router.post("/", async (req, res) => {
         if (isNaN(amount) || amount <= 0) {
           response = `END Invalid input. Enter a number like 2000.`;
         } else {
-          response = `CON Enter your Airtel/Mpamba PIN:`; // Mocked PIN
+          response = `CON Enter your Airtel/Mpamba PIN:`; // Mocked
         }
       } else if (level === 3) {
         const amount = parseInt(input[1]);
@@ -59,17 +59,9 @@ router.post("/", async (req, res) => {
           }
         }
       }
-    } else if (input[0] === "2") {
-      const { totalSaved, loanAmount, eligibleToBorrow } =
-        await savingsController.getBalanceForUSSD(phoneNumber);
-
-      response = `END 💼 Account Summary:
-  💰 Saved: ${formatMK(totalSaved)}
-  💳 Loan: ${formatMK(loanAmount)}
-  ✅ Can Borrow: ${formatMK(eligibleToBorrow)}`;
 
       // BORROW MONEY
-    } else if (input[0] === "3") {
+    } else if (input[0] === "2") {
       if (level === 1) {
         response = `CON Select amount to borrow:\n1. MK1,000\n2. MK2,000\n3. MK3,000\n10. Other`;
       } else if (level === 2 && ["1", "2", "3"].includes(input[1])) {
@@ -86,19 +78,14 @@ router.post("/", async (req, res) => {
             phoneNumber,
             `Loan request declined: You are not eligible to borrow MK${borrowAmount.toLocaleString()}.\nSave more first.`
           );
-
           response = `END Loan request declined.\nReason: Save more first.`;
         } else {
-          //  Step 1: Request the loan (smart contract call)
           await savingsController.requestLoan(phoneNumber, borrowAmount, req);
-
-          // Step 2: Disburse the loan via mobile money
           const loan = await savingsController.sendLoanToMobile(
             phoneNumber,
             borrowAmount
           );
 
-          // Step 3: Confirm result
           if (loan.entries && loan.entries[0].status === "Queued") {
             response = `END Loan of ${formatMK(
               borrowAmount / 1000
@@ -120,10 +107,13 @@ router.post("/", async (req, res) => {
           );
 
           if (!canBorrow) {
-            response = `END You are not eligible to borrow ${formatMK(
-              customAmount / 1000
-            )}.`;
+            await sendSms(
+              phoneNumber,
+              `Loan declined: You cannot borrow MK${customAmount.toLocaleString()}.\nSave more first.`
+            );
+            response = `END Loan request declined.\nReason: Not eligible yet.`;
           } else {
+            await savingsController.requestLoan(phoneNumber, customAmount, req);
             const loan = await savingsController.sendLoanToMobile(
               phoneNumber,
               customAmount
@@ -141,6 +131,16 @@ router.post("/", async (req, res) => {
       } else {
         response = `END Invalid selection. Try again.`;
       }
+
+      // VIEW BALANCE
+    } else if (input[0] === "3") {
+      const { totalSaved, loanAmount, eligibleToBorrow } =
+        await savingsController.getBalanceForUSSD(phoneNumber);
+
+      response = `END 💼 Account Summary:
+💰 Saved: ${formatMK(totalSaved)}
+💳 Loan: ${formatMK(loanAmount)}
+✅ Can Borrow: ${formatMK(eligibleToBorrow)}`;
 
       // INVALID OPTION
     } else {

@@ -1,0 +1,45 @@
+await contract.getBalance("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f")
+> 
+}
+  wait: [Function (anonymous)]
+  chainId: 31337,
+  creates: null,
+  v: 1,
+  s: '0x0098c72db624239fdd45c0a236ec293e04f1dc6acc23789db1351855bc2cfd22',
+  r: '0x8a10a67aee5ff77baf55c2efcec78b8120d4025cc439ab9100fc86eee22cbdae',
+  data: '0xaa67c91900000000000000000000000023618e81e3f5cdf7f54c3d65f7fbc0abf5b21e8f',
+  nonce: 12,
+  value: BigNumber { value: "10000000000000000000" },
+  to: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e',
+  gasLimit: BigNumber { value: "44295" },
+  maxFeePerGas: BigNumber { value: "1726491055" },
+  maxPriorityFeePerGas: BigNumber { value: "1500000000" },
+  gasPrice: BigNumber { value: "1678955896" },
+  from: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+  confirmations: 1,
+  transactionIndex: 0,
+  blockNumber: 13,
+  blockHash: '0x8589530a17bcd60a5f3dc51cc2023fd3efbf12aa892fc2e85e9af05edac9160b',
+  accessList: [],
+  type: 2,
+  hash: '0xe97f04a56167e6bec6565a5f289ef3e826d88b65344201a10dc08720e241798a',
+{
+... });
+...   value: ethers.utils.parseEther("10") // 10 ETH = MK10,000
+> await contract.depositFor("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f", {
+]
+  eligibleToBorrow: BigNumber { value: "0" }
+  loanDueDate: BigNumber { value: "0" },
+  loanAmount: BigNumber { value: "0" },
+  totalSaved: BigNumber { value: "0" },
+  BigNumber { value: "0" },
+[
+8e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f")
+});
+  value: ethers.utils.parseEther("10") // 10 ETH = MK10,000
+await contract.depositFor("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f", {
+await contract.getBalance("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f")
+const contract = await VillageSavings.attach("0xb7f8bc63bbcad18155201308c8f3540b07f84f5e");
+const VillageSavings = await ethers.getContractFactory("VillageSavings");
+clear
+await contract.getBalance("0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f")
