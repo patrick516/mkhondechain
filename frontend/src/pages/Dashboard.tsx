@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { io } from "socket.io-client";
 import StatsSection from "@/components/tables/StatsSection";
 import ActivityTable from "@/components/tables/ActivityTable";
-import LoanRequestTable from "@/components/tables/LoanRequestTable";
+// import LoanRequestTable from "@/components/tables/LoanRequestTable";
 import RejectModal from "@/components/tables/RejectModal";
 import axios from "@/api/axios";
 import toast from "react-hot-toast";
 import { fetchDashboardStats, fetchRecentActivity } from "@/api/dashboard";
 import { fetchPendingLoanRequests } from "@/api/dashboard";
+import LoanRequestTable from "@/components/tables/LoanRequestTable";
 
 import type {
   StatItem,
@@ -38,6 +39,8 @@ export default function Dashboard() {
         console.error("Failed to fetch activity:", err.message);
       });
   }, []);
+
+  const [loanLog, setLoanLog] = useState<LoanRequestItem[]>([]);
 
   const [loanRequests, setLoanRequests] = useState<LoanRequestItem[]>([]);
 
@@ -182,10 +185,48 @@ export default function Dashboard() {
 
         if (numericAmount <= eligibleMWK) {
           console.log("Auto-approving loan for", request.member);
-          handleApprove(request);
+
+          // Add to auto-loan history
+          setLoanLog((prev) => [
+            {
+              ...request,
+              status: "Approved",
+              date: new Date().toISOString(),
+            },
+            ...prev.slice(0, 9),
+          ]);
+
+          // Still push to Recent Activity (optional)
+          setActivities((prev) => [
+            {
+              member: request.member,
+              action: "Borrowed",
+              amount: request.amount,
+              date: new Date().toISOString(),
+            },
+            ...prev.slice(0, 9),
+          ]);
+
+          toast.success(`Loan approved for ${request.member}`);
         } else {
           console.log("Auto-rejecting loan for", request.member);
-          handleReject(request, "Exceeds 80% of allowed savings");
+
+          setLoanLog((prev) => [
+            {
+              ...request,
+              status: "Rejected",
+              date: new Date().toISOString(),
+            },
+            ...prev.slice(0, 9),
+          ]);
+
+          await axios.post("/loans/reject", {
+            phoneNumber: request.memberPhone,
+            amount: request.amount,
+            reason: "Exceeds 80% of allowed savings",
+          });
+
+          toast.error(`Loan rejected for ${request.member}`);
         }
       } catch (err) {
         console.error("Failed to auto-process loan request:", err.message);
@@ -218,6 +259,7 @@ export default function Dashboard() {
         All loans are automatically approved or rejected based on blockchain
         eligibility.
       </p>
+      <LoanRequestTable data={loanLog} />
 
       <h2 className="mt-10 mb-4 text-lg font-semibold">Recent Activity</h2>
       <ActivityTable data={activities} />

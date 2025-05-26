@@ -110,12 +110,18 @@ exports.depositViaUSSD = async (phoneNumber, amount, req) => {
   const address = await userService.getWalletAddressByPhone(phoneNumber);
   if (!address) throw new Error("Wallet address not found");
 
+  console.log("Wallet resolved for", phoneNumber, "→", address);
+  console.log(`Preparing deposit: MWK ${amount} → ETH ${amount / 1000}`);
+
   try {
+    console.log("Sending deposit transaction to contract...");
+
     const tx = await contract.connect(contract.signer).depositFor(address, {
       value: ethers.utils.parseEther((amount / 1000).toString()),
     });
 
     await tx.wait();
+    console.log(` Deposit successful. TX Hash: ${tx.hash}`);
 
     const member = await Member.findOneAndUpdate(
       { phone: phoneNumber },
@@ -259,7 +265,7 @@ exports.requestLoan = async (phoneNumber, amount, req) => {
 
   io.emit("transaction:new", {
     member: `${member.firstName} ${member.surname}`,
-    type: "Borrowed",
+    action: "Borrowed",
     amount: `MK ${amount.toLocaleString()}`,
     date: new Date().toISOString(),
   });

@@ -198,29 +198,42 @@ exports.getTotalOutstanding = async (req, res) => {
 
 exports.getRecentActivity = async (req, res) => {
   try {
-    const recent = await Transaction.find()
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .populate("member");
+    const recent = await Transaction.find().sort({ createdAt: -1 }).limit(10);
 
-    const formatted = recent.map((tx) => ({
-      member: `${tx.member.firstName} ${tx.member.surname}`,
-      action:
-        tx.type === "save"
-          ? "Saved"
-          : tx.type === "borrow"
-          ? "Borrowed"
-          : tx.type === "repay"
-          ? "Repaid"
-          : "Other",
-      amount: `MK ${tx.amount.toLocaleString()}`,
-      date: tx.createdAt.toISOString(),
-    }));
+    const memberMap = {}; // Optional: Cache for member lookup
 
-    res.status(200).json(formatted);
+    const formatted = await Promise.all(
+      recent.map(async (tx) => {
+        const memberId = tx.member.toString();
+
+        if (!memberMap[memberId]) {
+          const member = await Member.findById(tx.member);
+          memberMap[memberId] = member;
+        }
+
+        return {
+          member: `${memberMap[memberId].firstName} ${memberMap[memberId].surname}`,
+          action:
+            tx.type === "borrow"
+              ? "Borrowed"
+              : tx.type === "save"
+              ? "Saved"
+              : tx.type === "repay"
+              ? "Repaid"
+              : tx.type === "interest"
+              ? "Interest"
+              : "Unknown",
+          amount: `MK ${tx.amount.toLocaleString()}`,
+          status: tx.status || "Success",
+          date: tx.createdAt,
+        };
+      })
+    );
+
+    res.json(formatted);
   } catch (err) {
-    console.error("Failed to load recent activity:", err.message);
-    res.status(500).json({ error: "Failed to fetch recent activity" });
+    console.error("Failed to fetch recent activity:", err.message);
+    res.status(500).json({ error: "Failed to load activity" });
   }
 };
 

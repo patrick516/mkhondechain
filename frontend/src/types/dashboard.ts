@@ -7,8 +7,9 @@ export interface StatItem {
 
 export interface ActivityItem {
   member: string;
-  action: "Saved" | "Borrowed" | "Rejected";
+  action: string;
   amount: string;
+  status: string;
   date: string;
 }
 
