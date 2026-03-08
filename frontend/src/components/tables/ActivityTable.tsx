@@ -58,7 +58,7 @@ export default function ActivityTable({ data }: Props) {
                   })
                 : "N/A";
 
-              // 🎨 Color badge for action
+              //Color badge for action
               const actionColor =
                 entry.action === "Saved"
                   ? "bg-blue-500"
@@ -72,7 +72,7 @@ export default function ActivityTable({ data }: Props) {
                   ? "bg-purple-500"
                   : "bg-gray-500";
 
-              // 🎨 Color badge for status
+              // Color badge for status
               const statusColor =
                 entry.status === "Approved"
                   ? "bg-green-600"

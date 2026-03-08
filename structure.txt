@@ -1,0 +1,92 @@
+.
+├── backend
+│   ├── controllers
+│   │   ├── dashboardController.js
+│   │   ├── loanController.js
+│   │   ├── memberController.js
+│   │   ├── paymentController.js
+│   │   ├── savingsController.js
+│   │   └── transactionController.js
+│   ├── models
+│   │   ├── auditModel.js
+│   │   ├── loanRequestModel.js
+│   │   ├── memberModel.js
+│   │   ├── systemSettingModel.js
+│   │   ├── transactionModel.js
+│   │   └── User.js
+│   ├── ngrok.log
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── routes
+│   │   ├── auditRoute.js
+│   │   ├── contractRoute.js
+│   │   ├── dashboardRoutes.js
+│   │   ├── loanRoutes.js
+│   │   ├── memberRoutes.js
+│   │   ├── paymentRoutes.js
+│   │   ├── savings.js
+│   │   ├── transactionRoutes.js
+│   │   └── ussdRoutes.js
+│   ├── scripts
+│   │   ├── createUser.js
+│   │   └── sendAuditDaySMS.js
+│   ├── server.js
+│   ├── server.log
+│   ├── services
+│   │   ├── africasTalking.js
+│   │   ├── contract.js
+│   │   ├── cronJobs.js
+│   │   └── userService.js
+│   ├── start-ngrok.sh
+│   └── utils
+│       ├── africasTalkingPayments.js
+│       ├── africasTalkingSms.js
+│       ├── airtelPayments.js
+│       ├── paymentGateway.js
+│       ├── paymentGateways
+│       └── walletPool.js
+├── frontend
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── postcss.config.js
+│   ├── public
+│   │   ├── mkhondeChain.webp
+│   │   └── vite.svg
+│   ├── README.md
+│   ├── src
+│   │   ├── api
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   ├── components
+│   │   ├── context
+│   │   ├── index.css
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   ├── types
+│   │   ├── utils
+│   │   └── vite-env.d.ts
+│   ├── tailwind.config.js
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── README.md
+├── smart-contract
+│   ├── artifacts
+│   │   ├── build-info
+│   │   └── contracts
+│   ├── cache
+│   │   ├── console-history.txt
+│   │   └── solidity-files-cache.json
+│   ├── contracts
+│   │   └── VillageSavings.sol
+│   ├── hardhat.config.js
+│   ├── package.json
+│   ├── package-lock.json
+│   └── scripts
+│       └── deploy.js
+└── structure.txt
+
+26 directories, 64 files

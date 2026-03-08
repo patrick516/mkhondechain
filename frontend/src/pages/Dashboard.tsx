@@ -245,16 +245,15 @@ export default function Dashboard() {
       <StatsSection stats={stats} />
 
       <h2 className="mt-10 mb-4 text-lg font-semibold">
-        Pending Loan Requests
+        Loan Requests as of <strong>{new Date().toDateString()}</strong>
       </h2>
-      {/* <LoanRequestTable
+      <LoanRequestTable
         data={loanRequests}
-        onApprove={(request) => setConfirmingRequest(request)}
         onReject={(item) => {
           setRejectingRequest(item);
           setShowRejectModal(true);
         }}
-      /> */}
+      />
       <p className="text-gray-600">
         All loans are automatically approved or rejected based on blockchain
         eligibility.

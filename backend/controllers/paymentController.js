@@ -2,6 +2,7 @@ const {
   initiateMobileCheckout,
   sendMobileMoney,
 } = require("../utils/paymentGateway");
+const Member = require("../models/memberModel");
 
 // POST /api/payments/deposit
 exports.depositViaMobileMoney = async (req, res) => {

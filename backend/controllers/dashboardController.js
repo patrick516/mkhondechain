@@ -1,50 +1,47 @@
 const Member = require("../models/memberModel");
+const Transaction = require("../models/transactionModel");
+
 exports.getDashboardSummary = async (req, res) => {
   try {
     console.log("getDashboardSummary() called");
 
     // Count total members
     const totalMembers = await Member.countDocuments();
-    console.log("Total members:", totalMembers);
 
-    // Run aggregation
+    // Aggregate totalSaved and totalBorrowed from the Member model
     const aggregate = await Member.aggregate([
       {
         $match: {
-          totalSaved: { $type: "number" }, // only sum numeric values
+          totalSaved: { $type: "number" }, // Only numeric
         },
       },
       {
         $group: {
           _id: null,
           totalSaved: { $sum: "$totalSaved" },
-          totalBorrowed: { $sum: "$totalBorrowed" },
         },
       },
     ]);
+    const totals = aggregate.length > 0 ? aggregate[0] : { totalSaved: 0 };
 
-    console.log(" Aggregation result:", aggregate);
+    // totalBorrowed and totalRepaid from Transaction model
+    const borrowTx = await Transaction.find({ type: "borrow" });
+    const repayTx = await Transaction.find({ type: "repay" });
 
-    // Handle empty aggregation result
-    const totals =
-      aggregate.length > 0 ? aggregate[0] : { totalSaved: 0, totalBorrowed: 0 };
+    const totalBorrowed = borrowTx.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalRepaid = repayTx.reduce((sum, tx) => sum + tx.amount, 0);
 
-    const totalOwing = totals.totalBorrowed;
+    const totalOwing = totalBorrowed - totalRepaid;
 
-    console.log(" Dashboard stats:", {
+    const stats = {
       totalSavings: totals.totalSaved,
-      totalBorrowed: totals.totalBorrowed,
+      totalBorrowed,
       totalOwing,
       totalMembers,
-    });
-    console.log("✔️ Aggregated totals:", totals);
+    };
+    console.log("Final Dashboard Summary:", stats);
 
-    return res.status(200).json({
-      totalSavings: totals.totalSaved,
-      totalBorrowed: totals.totalBorrowed,
-      totalOwing,
-      totalMembers,
-    });
+    return res.status(200).json(stats);
   } catch (err) {
     console.error("Error in dashboard summary:", err.message);
     return res.status(500).json({ error: "Failed to load dashboard stats" });
