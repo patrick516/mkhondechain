@@ -1,7 +1,4 @@
-const {
-  initiateMobileCheckout,
-  sendMobileMoney,
-} = require("../utils/paymentGateway");
+const paychanguGateway = require("../utils/paymentGateways/payChanguGateway");
 const Member = require("../models/memberModel");
 
 // POST /api/payments/deposit
@@ -18,7 +15,11 @@ exports.depositViaMobileMoney = async (req, res) => {
       return res.status(404).json({ error: "Member not found" });
     }
 
-    const result = await initiateMobileCheckout(phoneNumber, amount);
+    const result = await paychanguGateway.deposit(phoneNumber, amount);
+
+    if (!result || result.status !== "Queued") {
+      return res.status(500).json({ error: "Deposit failed via PayChangu" });
+    }
 
     const io = req.app?.get?.("io");
     if (io) {
@@ -32,8 +33,8 @@ exports.depositViaMobileMoney = async (req, res) => {
 
     res.status(200).json(result);
   } catch (error) {
-    console.error("❌ Full deposit error:", error); // Log full stack
-    res.status(500).json({ error: "Deposit has  failed" });
+    console.error("Full deposit error:", error);
+    res.status(500).json({ error: "Deposit has failed" });
   }
 };
 
@@ -46,7 +47,14 @@ exports.disburseLoanToMobile = async (req, res) => {
   }
 
   try {
-    const result = await sendMobileMoney(phoneNumber, amount);
+    const result = await paychanguGateway.cashout(phoneNumber, amount);
+
+    if (!result || result.status !== "Queued") {
+      return res
+        .status(500)
+        .json({ error: "Loan disbursement failed via PayChangu" });
+    }
+
     res.status(200).json(result);
   } catch (error) {
     console.error("Disbursement failed:", error.message);

@@ -1,10 +1,7 @@
 const contract = require("../services/contract");
 const { ethers } = require("ethers");
 const userService = require("../services/userService");
-const {
-  initiateMobileCheckout,
-  sendMobileMoney,
-} = require("../utils/paymentGateway");
+const paychanguGateway = require("../utils/paymentGateways/payChanguGateway");
 const sendSms = require("../utils/africasTalkingSms");
 const SystemSetting = require("../models/systemSettingModel");
 const Member = require("../models/memberModel");
@@ -41,7 +38,7 @@ exports.deposit = async (req, res) => {
 };
 
 exports.depositViaMobileMoney = async (phoneNumber, amount) => {
-  return await initiateMobileCheckout(phoneNumber, amount);
+  return await paychanguGateway.deposit(phoneNumber, amount);
 };
 
 exports.getBalanceForAPI = async (req, res) => {
@@ -68,7 +65,7 @@ exports.borrow = async (req, res) => {
 
     const tx = await contract.requestLoan(
       ethers.utils.parseEther(amount.toString()),
-      daysToRepay
+      daysToRepay,
     );
     await tx.wait();
 
@@ -80,9 +77,9 @@ exports.borrow = async (req, res) => {
 };
 
 exports.sendLoanToMobile = async (phoneNumber, amount) => {
-  return await sendMobileMoney(phoneNumber, amount);
+  // Use PayChangu to send loan to mobile wallet
+  return await paychanguGateway.cashout(phoneNumber, amount);
 };
-
 exports.repay = async (req, res) => {
   try {
     const { amount } = req.body;
@@ -104,9 +101,6 @@ exports.repay = async (req, res) => {
 // ─────────────────────────────
 
 exports.depositViaUSSD = async (phoneNumber, amount, req) => {
-  const Member = require("../models/memberModel");
-  const Transaction = require("../models/transactionModel");
-
   const address = await userService.getWalletAddressByPhone(phoneNumber);
   if (!address) throw new Error("Wallet address not found");
 
@@ -116,17 +110,19 @@ exports.depositViaUSSD = async (phoneNumber, amount, req) => {
   try {
     console.log("Sending deposit transaction to contract...");
 
-    const tx = await contract.connect(contract.signer).depositFor(address, {
-      value: ethers.utils.parseEther((amount / 1000).toString()),
-    });
+    // Initiate deposit via PayChangu
+    const depositResult = await paychanguGateway.deposit(phoneNumber, amount);
 
-    await tx.wait();
-    console.log(` Deposit successful. TX Hash: ${tx.hash}`);
+    if (!depositResult || depositResult.status !== "Queued") {
+      throw new Error("Deposit failed via PayChangu");
+    }
+
+    console.log(`Deposit queued via PayChangu:`, depositResult);
 
     const member = await Member.findOneAndUpdate(
       { phone: phoneNumber },
       { $inc: { savingsCount: 1 } },
-      { new: true }
+      { new: true },
     );
 
     await Transaction.create({
@@ -138,7 +134,7 @@ exports.depositViaUSSD = async (phoneNumber, amount, req) => {
 
     await sendSms(
       phoneNumber,
-      `MkhondeChain: You’ve successfully saved MK${amount.toLocaleString()}.`
+      `MkhondeChain: You’ve successfully saved MK${amount.toLocaleString()}.`,
     );
 
     const io = req.app.get("io");
@@ -168,7 +164,7 @@ exports.getBalanceForUSSD = async (phoneNumber) => {
   console.log("💰 totalSaved (ETH):", ethers.utils.formatEther(totalSaved));
   console.log(
     "✅ eligibleToBorrow (ETH):",
-    ethers.utils.formatEther(eligibleToBorrow)
+    ethers.utils.formatEther(eligibleToBorrow),
   );
 
   return {
@@ -206,7 +202,7 @@ exports.requestLoan = async (phoneNumber, amount, req) => {
   const member = await Member.findOneAndUpdate(
     { phone: phoneNumber },
     { $inc: { borrowCount: 1 } },
-    { new: true }
+    { new: true },
   );
 
   const io = req.app.get("io");
@@ -223,7 +219,7 @@ exports.requestLoan = async (phoneNumber, amount, req) => {
     const maxMK = parseFloat(ethers.utils.formatEther(maxAllowed)) * 1000;
     await sendSms(
       phoneNumber,
-      `Loan exceeds 80%. Max allowed: MK${Math.floor(maxMK).toLocaleString()}`
+      `Loan exceeds 80%. Max allowed: MK${Math.floor(maxMK).toLocaleString()}`,
     );
     return;
   }
@@ -235,7 +231,7 @@ exports.requestLoan = async (phoneNumber, amount, req) => {
     console.error("Contract reverted:", error.message);
     await sendSms(
       phoneNumber,
-      `Loan failed. Reason: ${error.reason || "exceeds limit"}`
+      `Loan failed. Reason: ${error.reason || "exceeds limit"}`,
     );
     return;
   }
@@ -248,7 +244,7 @@ exports.requestLoan = async (phoneNumber, amount, req) => {
   });
   await sendSms(
     phoneNumber,
-    `MkhondeChain: Your loan of MK${amount.toLocaleString()} has been approved and disbursed.`
+    `MkhondeChain: Your loan of MK${amount.toLocaleString()} has been approved and disbursed.`,
   );
 
   //  Log audit
@@ -279,7 +275,7 @@ exports.rejectLoan = async (req, res) => {
   try {
     await sendSms(
       phoneNumber,
-      `Your loan request for ${amount} was rejected. Reason: ${reason}`
+      `Your loan request for ${amount} was rejected. Reason: ${reason}`,
     );
 
     res.status(200).json({ message: "Rejection handled and SMS sent" });

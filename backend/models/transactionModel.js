@@ -1,3 +1,4 @@
+// models/transactionModel.js
 const mongoose = require("mongoose");
 
 const transactionSchema = new mongoose.Schema({
@@ -26,7 +27,7 @@ const transactionSchema = new mongoose.Schema({
   },
   method: {
     type: String,
-    enum: ["USSD", "Admin", "SmartContract"],
+    enum: ["USSD", "Admin", "SmartContract", "Mobile"],
     default: "USSD",
   },
   note: {
@@ -40,6 +41,9 @@ const transactionSchema = new mongoose.Schema({
   interest: {
     type: Number,
     default: 0,
+  },
+  payChanguId: {
+    type: String, // store PayChangu transaction ID
   },
 });
 
