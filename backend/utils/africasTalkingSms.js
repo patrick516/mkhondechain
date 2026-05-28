@@ -1,3 +1,15 @@
+// ─────────────────────────────────────────────────────────────
+// Africa's Talking SMS Utility
+//
+// IMPORTANT: SMS failure must NEVER crash the USSD flow.
+// We log errors silently and continue — the transaction
+// already succeeded on blockchain even if SMS fails.
+//
+// Sandbox note: In AT sandbox, SMS is only delivered to
+// numbers registered in your sandbox test accounts.
+// USSD simulator works regardless.
+// ─────────────────────────────────────────────────────────────
+
 require("dotenv").config();
 const africastalking = require("africastalking");
 
@@ -11,12 +23,15 @@ const sendSms = async (phone, message) => {
     const result = await at.SMS.send({
       to: [phone],
       message,
-      // from: "AFRICASTKNG", // use "Mkhonde" if verified
+      // from: "MkhondeChain", // uncomment when shortcode is approved
     });
-    console.log("SMS sent:", result);
+    console.log(
+      `[SMS] Sent to ${phone}:`,
+      result?.SMSMessageData?.Message || "OK",
+    );
   } catch (error) {
-    console.error(" SMS failed:", error.message);
-    throw error;
+    // Log the error but NEVER throw — SMS failure must not crash USSD
+    console.error(`[SMS] Failed to send to ${phone}:`, error.message);
   }
 };
 

@@ -10,7 +10,7 @@ export const disburseLoan = async (phoneNumber: string, amount: number) => {
 
 export const depositViaMobileMoney = async (
   phoneNumber: string,
-  amount: number
+  amount: number,
 ) => {
   const res = await axios.post("/payments/deposit", {
     phoneNumber,

@@ -26,7 +26,7 @@ sudo service mongod start
 c
 echo "4. Starting backend server..."
 cd ~/Desktop/INCLUDES/mkhondechain/backend
-bash ~ "npx run start"
+bash ~ "npx start"
 
 sleep 2
 

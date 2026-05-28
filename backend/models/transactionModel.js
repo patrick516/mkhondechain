@@ -1,4 +1,8 @@
-// models/transactionModel.js
+// ─────────────────────────────────────────────────────────────
+// Transaction Model
+// Records every financial event — save, borrow, repay
+// ─────────────────────────────────────────────────────────────
+
 const mongoose = require("mongoose");
 
 const transactionSchema = new mongoose.Schema({
@@ -27,23 +31,20 @@ const transactionSchema = new mongoose.Schema({
   },
   method: {
     type: String,
-    enum: ["USSD", "Admin", "SmartContract", "Mobile"],
+    enum: ["USSD", "Admin", "SmartContract", "Mobile Money"],
     default: "USSD",
   },
   note: {
     type: String,
     default: "",
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
   interest: {
     type: Number,
     default: 0,
   },
-  payChanguId: {
-    type: String, // store PayChangu transaction ID
+  createdAt: {
+    type: Date,
+    default: Date.now,
   },
 });
 
