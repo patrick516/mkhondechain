@@ -9,16 +9,17 @@ import AddMember from "@/pages/AddMember";
 import Transactions from "@/pages/Transactions";
 import AddDeposit from "./pages/AddDeposit";
 import MemberTransactions from "@/pages/MemberTransactions";
+import Settings from "@/pages/Settings";
 
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public route — no login needed */}
+          {/* Public */}
           <Route path="/login" element={<Login />} />
 
-          {/* Protected routes — redirect to /login if not authenticated */}
+          {/* Protected */}
           <Route
             path="/*"
             element={
@@ -30,6 +31,7 @@ function App() {
                     <Route path="/add-member" element={<AddMember />} />
                     <Route path="/transactions" element={<Transactions />} />
                     <Route path="/admin/deposit" element={<AddDeposit />} />
+                    <Route path="/settings" element={<Settings />} />
                     <Route
                       path="/members/:memberId/transactions"
                       element={<MemberTransactions />}

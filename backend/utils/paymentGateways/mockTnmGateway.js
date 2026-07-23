@@ -1,65 +1,84 @@
 // ─────────────────────────────────────────────────────────────
 // Mock TNM Mpamba Gateway
-// Simulates real TNM Mpamba deposit and disbursement behavior.
-// Replace this file with the real TNM API integration when ready.
+// Simulates real TNM Mpamba API for development.
+// Replace with real TNM API integration when ready.
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Simulates a mobile money deposit (member saving money)
- * @param {string} phoneNumber - Member's phone number
- * @param {number} amount - Amount in MWK
- * @returns {Promise<object>}
- */
-async function initiateMobileCheckout(phoneNumber, amount) {
-  console.log(
-    `[Mock TNM Mpamba] Deposit request: ${phoneNumber} → MK ${amount.toLocaleString()}`,
-  );
+const logger = require("../../utils/logger");
 
-  // Simulate a small processing delay like a real API would have
+/**
+ * Simulate mobile money checkout (member depositing/saving money)
+ * @param {string} phoneNumber - Member's phone in +265XXXXXXXXX format
+ * @param {number} amount - Amount in MWK
+ * @param {string} reference - Unique transaction reference
+ * @returns {Promise<{success: boolean, reference: string, provider: string}>}
+ */
+async function initiateMobileCheckout(phoneNumber, amount, reference) {
+  logger.info("MOCK_TNM_CHECKOUT", { phoneNumber, amount, reference });
+
+  if (!phoneNumber || !phoneNumber.match(/^\+265\d{9}$/)) {
+    throw new Error("Invalid phone number format");
+  }
+  if (!amount || amount < 1) {
+    throw new Error("Invalid amount");
+  }
+  if (!reference) {
+    throw new Error("Reference is required");
+  }
+
   await new Promise((resolve) => setTimeout(resolve, 300));
 
+  // Simulate occasional failure (5% chance)
+  if (Math.random() < 0.05) {
+    throw new Error("TNM Mpamba: Insufficient funds or network error");
+  }
+
   return {
-    status: "Success",
+    success: true,
+    reference,
     provider: "TNM Mpamba",
+    transactionId: `TNM-DEP-${Date.now()}`,
     phoneNumber,
     amount,
-    transactionId: `TNM-DEP-${Date.now()}`,
-    message: "Deposit initiated successfully",
-    entries: [
-      {
-        status: "Queued",
-        transactionId: `TNM-DEP-${Date.now()}`,
-      },
-    ],
   };
 }
 
 /**
- * Simulates sending money to a member's wallet (loan disbursement)
- * @param {string} phoneNumber - Member's phone number
+ * Simulate sending money to member (loan disbursement)
+ * @param {string} phoneNumber - Member's phone in +265XXXXXXXXX format
  * @param {number} amount - Amount in MWK
- * @returns {Promise<object>}
+ * @param {string} reference - Unique transaction reference
+ * @returns {Promise<{success: boolean, reference: string, provider: string}>}
  */
-async function sendMobileMoney(phoneNumber, amount) {
-  console.log(
-    `[Mock TNM Mpamba] Disbursement request: ${phoneNumber} ← MK ${amount.toLocaleString()}`,
-  );
+async function sendMobileMoney(phoneNumber, amount, reference) {
+  logger.info("MOCK_TNM_DISBURSE", { phoneNumber, amount, reference });
+
+  if (!phoneNumber || !phoneNumber.match(/^\+265\d{9}$/)) {
+    throw new Error("Invalid phone number format");
+  }
+  if (!amount || amount < 1) {
+    throw new Error("Invalid amount");
+  }
+  if (!reference) {
+    throw new Error("Reference is required");
+  }
 
   await new Promise((resolve) => setTimeout(resolve, 300));
 
+  // Simulate occasional failure (3% chance)
+  if (Math.random() < 0.03) {
+    throw new Error(
+      "TNM Mpamba: Disbursement failed — recipient not registered",
+    );
+  }
+
   return {
-    status: "Success",
+    success: true,
+    reference,
     provider: "TNM Mpamba",
+    transactionId: `TNM-DIS-${Date.now()}`,
     phoneNumber,
     amount,
-    transactionId: `TNM-DIS-${Date.now()}`,
-    message: "Loan disbursed successfully",
-    entries: [
-      {
-        status: "Queued",
-        transactionId: `TNM-DIS-${Date.now()}`,
-      },
-    ],
   };
 }
 

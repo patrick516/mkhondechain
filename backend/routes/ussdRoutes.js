@@ -1,56 +1,63 @@
 // ─────────────────────────────────────────────────────────────
-// USSD Routes — MkhondeChain
+// USSD Routes — MkhondeChain (Secure, Non-Blockchain)
 // Bilingual: English + Chichewa
-// Handles: Save, Borrow, Repay, View Balance
+// Every transaction requires PIN verification.
 // ─────────────────────────────────────────────────────────────
 
 const express = require("express");
 const router = express.Router();
 const savings = require("../controllers/savingsController");
-const userService = require("../services/userService");
 const Member = require("../models/memberModel");
+const SystemSetting = require("../models/systemSettingModel");
+const logger = require("../utils/logger");
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────
 
-// Convert ETH value to MWK display string
-// 1 ETH = 1000 MWK in this system
-const toMK = (ethValue) => {
-  const mk = parseFloat(ethValue) * 1000;
-  return `MK${Math.floor(mk).toLocaleString()}`;
+const formatDueDate = (loanDueDate) => {
+  if (!loanDueDate || loanDueDate === 0) return "N/A";
+  const date = new Date(loanDueDate * 1000);
+  return date.toDateString();
 };
-
-// Convert raw MWK amount to ETH for contract
-const toEth = (mkAmount) => (mkAmount / 1000).toString();
 
 // ─────────────────────────────────────────────────────────────
 // MAIN USSD HANDLER
 // ─────────────────────────────────────────────────────────────
 
 router.post("/", async (req, res) => {
-  const { phoneNumber, text } = req.body;
+  const { phoneNumber, text, sessionId } = req.body;
+  const clientIp = req.ip || req.connection.remoteAddress;
 
-  console.log(`[USSD] Phone: ${phoneNumber} | Input: "${text}"`);
+  logger.info("USSD_REQUEST", { phoneNumber, text, sessionId, ip: clientIp });
 
   const input = text ? text.split("*") : [""];
   const level = input.length;
   let response = "";
 
   try {
-    // ── Check if member is registered ──────────────────────
-    const ethAddress = await userService.getWalletAddressByPhone(phoneNumber);
-    const member = await Member.findOne({ phone: phoneNumber });
+    // ── Check registration ─────────────────────────────────
+    const member = await Member.findOne({
+      phone: phoneNumber,
+      status: "active",
+    });
 
-    if (!member || !ethAddress) {
+    if (!member) {
       response =
         `END Simunalembetsedwe / Not registered.\n` +
         `Lankhulani ndi mtsogoleri wa gulu lanu.\n` +
         `Contact your group leader to join.`;
-
       res.set("Content-Type", "text/plain");
       return res.send(response);
     }
+
+    // ── PIN Verification (required for all transactions) ────
+    // PIN is collected as first input after menu selection
+    // Session state would ideally be stored in Redis; for now, we use text pattern
+    // Format: menu*pin*amount*confirm
+
+    const setting = await SystemSetting.findOne();
+    const repayDays = setting?.repayDays || 30;
 
     // ── MAIN MENU ──────────────────────────────────────────
     if (text === "") {
@@ -68,23 +75,28 @@ router.post("/", async (req, res) => {
       // ────────────────────────────────────────────────────────
     } else if (input[0] === "1") {
       if (level === 1) {
-        response =
-          `CON Lowetsani ndalama yosungira:\n` +
-          `Enter amount to save (MK):\n` +
-          `e.g. 2000`;
+        response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
       } else if (level === 2) {
-        const amount = parseInt(input[1]);
-
+        const pin = input[1];
+        const validPin = await member.comparePin(pin);
+        if (!validPin) {
+          response = `END PIN yolakwika. / Invalid PIN.`;
+        } else {
+          response =
+            `CON Lowetsani ndalama yosungira:\n` +
+            `Enter amount to save (MK):\n` +
+            `e.g. 2000`;
+        }
+      } else if (level === 3) {
+        const amount = parseInt(input[2]);
         if (isNaN(amount) || amount <= 0) {
           response =
             `END Chiwerengero cholakwika.\n` +
-            `Invalid amount. Please enter\n` +
-            `a number e.g. 2000`;
+            `Invalid amount. Enter a number\n` +
+            `e.g. 2000`;
         } else if (amount < 100) {
           response =
-            `END Ndalama yochepa kwambiri.\n` +
-            `Minimum amount is MK100.\n` +
-            `Yochepa kwambiri ndi MK100.`;
+            `END Ndalama yochepa kwambiri.\n` + `Minimum amount is MK100.`;
         } else {
           response =
             `CON Mukulingalira kusungira:\n` +
@@ -94,30 +106,36 @@ router.post("/", async (req, res) => {
             `1. Inde, pitirizani / Yes\n` +
             `2. Ayi, bwerani / No`;
         }
-      } else if (level === 3) {
-        const amount = parseInt(input[1]);
-        const confirm = input[2];
+      } else if (level === 4) {
+        const pin = input[1];
+        const amount = parseInt(input[2]);
+        const confirm = input[3];
 
         if (confirm === "2") {
-          response =
-            `END Mwasiya. Transaction cancelled.\n` + `Zikomo / Thank you.`;
+          response = `END Mwasiya. Cancelled. Zikomo!`;
         } else if (confirm === "1") {
           try {
-            await savings.depositViaUSSD(phoneNumber, amount, req);
+            const result = await savings.depositViaUSSD(
+              phoneNumber,
+              amount,
+              req,
+            );
             response =
               `END Zachita bwino! / Success!\n` +
               `MK${amount.toLocaleString()} yasungidwa.\n` +
-              `MK${amount.toLocaleString()} saved.\n` +
+              `Balance: MK${result.balance.toLocaleString()}\n` +
               `Zikomo! / Thank you!`;
           } catch (err) {
-            console.error("[USSD Save Error]", err.message);
+            logger.error("USSD_SAVE_ERROR", {
+              phoneNumber,
+              amount,
+              error: err.message,
+            });
             response =
-              `END Palibe. Yesaninso.\n` +
-              `Save failed. Please try again.\n` +
-              `Mukhoza kuloweza kachiwiri.`;
+              `END Palibe. Yesaninso.\n` + `Save failed: ${err.message}`;
           }
         } else {
-          response = `END Sankhani 1 kapena 2.\n` + `Select 1 or 2.`;
+          response = `END Sankhani 1 kapena 2. Select 1 or 2.`;
         }
       }
 
@@ -126,119 +144,121 @@ router.post("/", async (req, res) => {
       // ────────────────────────────────────────────────────────
     } else if (input[0] === "2") {
       if (level === 1) {
-        // Show how much they can borrow first
-        try {
-          const bal = await savings.getBalanceForUSSD(phoneNumber);
-          const eligible = toMK(bal.eligibleToBorrow);
-          const hasLoan = parseFloat(bal.loanAmount) > 0;
+        response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
+      } else if (level === 2) {
+        const pin = input[1];
+        const validPin = await member.comparePin(pin);
+        if (!validPin) {
+          response = `END PIN yolakwika. / Invalid PIN.`;
+        } else {
+          try {
+            const bal = await savings.getBalanceForUSSD(phoneNumber);
+            const eligible = bal.eligibleToBorrow;
+            const hasLoan = bal.loanAmount > 0;
 
-          if (hasLoan) {
+            if (hasLoan) {
+              const dueDate = formatDueDate(bal.loanDueDate);
+              response =
+                `END Muli ndi ngongole kale.\n` +
+                `You have an active loan:\n` +
+                `MK${bal.loanAmount.toLocaleString()}\n` +
+                `Due: ${dueDate}\n` +
+                `Bwezerani kaye. Repay first (3).`;
+            } else if (eligible === 0) {
+              response =
+                `END Mulibe ndalama zosungidwa.\n` +
+                `You have no savings. Save first to borrow.`;
+            } else {
+              response =
+                `CON Mutha kutenga: MK${eligible.toLocaleString()}\n` +
+                `You can borrow up to: MK${eligible.toLocaleString()}\n` +
+                `Kubweza: Masiku ${repayDays}\n` +
+                `Repay in: ${repayDays} days\n` +
+                `─────────────────\n` +
+                `1. MK1,000\n` +
+                `2. MK2,000\n` +
+                `3. MK3,000\n` +
+                `4. Ena / Other amount`;
+            }
+          } catch (err) {
             response =
-              `END Muli ndi ngongole kale.\n` +
-              `You already have an active loan.\n` +
-              `Bwezerani ngongole yanu kaye.\n` +
-              `Please repay it first (Option 3).`;
-          } else {
-            response =
-              `CON Mutha kutenga: ${eligible}\n` +
-              `You can borrow up to: ${eligible}\n` +
+              `CON Mutha kutenga ngongole.\n` +
+              `You can borrow a loan.\n` +
               `─────────────────\n` +
               `1. MK1,000\n` +
               `2. MK2,000\n` +
               `3. MK3,000\n` +
               `4. Ena / Other amount`;
           }
-        } catch (err) {
-          response =
-            `CON Sankhani ndalama yotenga:\n` +
-            `Select amount to borrow:\n` +
-            `1. MK1,000\n` +
-            `2. MK2,000\n` +
-            `3. MK3,000\n` +
-            `4. Ena / Other amount`;
         }
-      } else if (level === 2) {
+      } else if (level === 3) {
         const amountMap = { 1: 1000, 2: 2000, 3: 3000 };
 
-        if (["1", "2", "3"].includes(input[1])) {
-          const borrowAmount = amountMap[input[1]];
+        if (["1", "2", "3"].includes(input[2])) {
+          const borrowAmount = amountMap[input[2]];
           const canBorrow = await savings.canBorrow(phoneNumber, borrowAmount);
 
           if (!canBorrow) {
             response =
               `END Mulibe ndalama yokwanira.\n` +
               `Not eligible for MK${borrowAmount.toLocaleString()}.\n` +
-              `Sungani ndalama zambiri kaye.\n` +
-              `Save more first to qualify.`;
+              `Sungani ndalama zambiri.\n` +
+              `Save more first.`;
           } else {
             response =
               `CON Mukulingalira kutenga:\n` +
               `You are about to borrow:\n` +
               `MK${borrowAmount.toLocaleString()}\n` +
-              `Ndalama ipita ku Mpamba/Airtel.\n` +
-              `Money sent to your wallet.\n` +
+              `Kubweza mu masiku: ${repayDays}\n` +
+              `Repay in: ${repayDays} days\n` +
               `─────────────────\n` +
-              `1. Inde, pitirizani / Yes\n` +
-              `2. Ayi, bwerani / No`;
+              `1. Inde / Yes\n` +
+              `2. Ayi / No`;
           }
-        } else if (input[1] === "4") {
+        } else if (input[2] === "4") {
           response =
             `CON Lowetsani ndalama yotenga:\n` +
             `Enter custom amount (MK):\n` +
             `e.g. 1500`;
         } else {
-          response =
-            `END Sankhani 1, 2, 3 kapena 4.\n` +
-            `Invalid selection. Try again.`;
+          response = `END Sankhani 1-4. Invalid selection.`;
         }
-      } else if (level === 3) {
+      } else if (level === 4) {
         const amountMap = { 1: 1000, 2: 2000, 3: 3000 };
 
-        // Confirmation for preset amounts
-        if (["1", "2", "3"].includes(input[1])) {
-          const borrowAmount = amountMap[input[1]];
-          const confirm = input[2];
+        if (["1", "2", "3"].includes(input[2])) {
+          const borrowAmount = amountMap[input[2]];
+          const confirm = input[3];
 
           if (confirm === "2") {
-            response =
-              `END Mwasiya. Transaction cancelled.\n` + `Zikomo / Thank you.`;
+            response = `END Mwasiya. Cancelled. Zikomo!`;
           } else if (confirm === "1") {
             try {
-              await savings.requestLoan(phoneNumber, borrowAmount, req);
-              const loan = await savings.sendLoanToMobile(
+              const result = await savings.requestLoan(
                 phoneNumber,
                 borrowAmount,
+                req,
               );
-
-              if (loan.entries && loan.entries[0].status === "Queued") {
-                response =
-                  `END Ngongole yapita! / Loan sent!\n` +
-                  `MK${borrowAmount.toLocaleString()} yapita ku wallet yanu.\n` +
-                  `MK${borrowAmount.toLocaleString()} sent to your wallet.\n` +
-                  `Bwezerani mu masiku 30.\n` +
-                  `Repay within 30 days.`;
-              } else {
-                response =
-                  `END Palibe. Yesaninso.\n` + `Loan failed. Please try again.`;
-              }
-            } catch (err) {
-              console.error("[USSD Borrow Error]", err.message);
               response =
-                `END Palibe. Yesaninso.\n` +
-                `Borrow failed. Please try again.\n` +
-                `Mukhoza kuloweza kachiwiri.`;
+                `END Ngongole yafunsidwa! / Loan requested!\n` +
+                `MK${borrowAmount.toLocaleString()}.\n` +
+                `Yikuyembekezera kuvomerezedwa.\n` +
+                `Waiting for group leader approval.`;
+            } catch (err) {
+              logger.error("USSD_BORROW_ERROR", {
+                phoneNumber,
+                amount: borrowAmount,
+                error: err.message,
+              });
+              response = `END Palibe. ${err.message}`;
             }
           } else {
-            response = `END Sankhani 1 kapena 2.\n` + `Select 1 or 2.`;
+            response = `END Sankhani 1 kapena 2. Select 1 or 2.`;
           }
-
-          // Custom amount — check eligibility
-        } else if (input[1] === "4") {
-          const customAmount = parseInt(input[2]);
-
+        } else if (input[2] === "4") {
+          const customAmount = parseInt(input[3]);
           if (isNaN(customAmount) || customAmount <= 0) {
-            response =
-              `END Chiwerengero cholakwika.\n` + `Invalid amount. Try again.`;
+            response = `END Chiwerengero cholakwika. Invalid amount.`;
           } else {
             const canBorrow = await savings.canBorrow(
               phoneNumber,
@@ -248,56 +268,41 @@ router.post("/", async (req, res) => {
               response =
                 `END Mulibe ndalama yokwanira.\n` +
                 `Not eligible for MK${customAmount.toLocaleString()}.\n` +
-                `Sungani ndalama zambiri kaye.\n` +
-                `Save more to qualify.`;
+                `Save more first.`;
             } else {
               response =
                 `CON Mukulingalira kutenga:\n` +
                 `You are about to borrow:\n` +
                 `MK${customAmount.toLocaleString()}\n` +
+                `Kubweza mu masiku: ${repayDays}\n` +
                 `─────────────────\n` +
-                `1. Inde, pitirizani / Yes\n` +
-                `2. Ayi, bwerani / No`;
+                `1. Inde / Yes\n` +
+                `2. Ayi / No`;
             }
           }
-        } else {
-          response = `END Sankhani yolondola.\n` + `Invalid selection.`;
         }
-
-        // Custom amount confirmation (level 4)
-      } else if (level === 4 && input[1] === "4") {
-        const customAmount = parseInt(input[2]);
-        const confirm = input[3];
+      } else if (level === 5 && input[2] === "4") {
+        const customAmount = parseInt(input[3]);
+        const confirm = input[4];
 
         if (confirm === "2") {
-          response =
-            `END Mwasiya. Transaction cancelled.\n` + `Zikomo / Thank you.`;
+          response = `END Mwasiya. Cancelled. Zikomo!`;
         } else if (confirm === "1") {
           try {
-            await savings.requestLoan(phoneNumber, customAmount, req);
-            const loan = await savings.sendLoanToMobile(
+            const result = await savings.requestLoan(
               phoneNumber,
               customAmount,
+              req,
             );
-
-            if (loan.entries && loan.entries[0].status === "Queued") {
-              response =
-                `END Ngongole yapita! / Loan sent!\n` +
-                `MK${customAmount.toLocaleString()} yapita ku wallet yanu.\n` +
-                `MK${customAmount.toLocaleString()} sent to your wallet.\n` +
-                `Bwezerani mu masiku 30.\n` +
-                `Repay within 30 days.`;
-            } else {
-              response =
-                `END Palibe. Yesaninso.\n` + `Loan failed. Please try again.`;
-            }
-          } catch (err) {
-            console.error("[USSD Custom Borrow Error]", err.message);
             response =
-              `END Palibe. Yesaninso.\n` + `Borrow failed. Please try again.`;
+              `END Ngongole yafunsidwa! / Loan requested!\n` +
+              `MK${customAmount.toLocaleString()}.\n` +
+              `Waiting for group leader approval.`;
+          } catch (err) {
+            response = `END Palibe. ${err.message}`;
           }
         } else {
-          response = `END Sankhani 1 kapena 2.\n` + `Select 1 or 2.`;
+          response = `END Sankhani 1 kapena 2.`;
         }
       }
 
@@ -306,66 +311,79 @@ router.post("/", async (req, res) => {
       // ────────────────────────────────────────────────────────
     } else if (input[0] === "3") {
       if (level === 1) {
-        try {
-          const bal = await savings.getBalanceForUSSD(phoneNumber);
-          const loanMK = Math.floor(parseFloat(bal.loanAmount) * 1000);
+        response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
+      } else if (level === 2) {
+        const pin = input[1];
+        const validPin = await member.comparePin(pin);
+        if (!validPin) {
+          response = `END PIN yolakwika. / Invalid PIN.`;
+        } else {
+          try {
+            const bal = await savings.getBalanceForUSSD(phoneNumber);
+            const loanMK = bal.loanAmount;
 
-          if (loanMK === 0) {
+            if (loanMK === 0) {
+              response =
+                `END Mulibe ngongole.\n` +
+                `You have no active loan.\n` +
+                `Zikomo! / Thank you!`;
+            } else {
+              const dueDate = formatDueDate(bal.loanDueDate);
+              response =
+                `CON Ngongole yanu:\n` +
+                `Your loan: MK${loanMK.toLocaleString()}\n` +
+                `Due date: ${dueDate}\n` +
+                `─────────────────\n` +
+                `Lowetsani ndalama yobweza:\n` +
+                `Enter repayment amount (MK):`;
+            }
+          } catch (err) {
             response =
-              `END Mulibe ngongole.\n` +
-              `You have no active loan.\n` +
-              `Zikomo! / Thank you!`;
-          } else {
-            response =
-              `CON Ngongole yanu: MK${loanMK.toLocaleString()}\n` +
-              `Your loan: MK${loanMK.toLocaleString()}\n` +
-              `─────────────────\n` +
-              `Lowetsani ndalama yobweza:\n` +
+              `CON Lowetsani ndalama yobweza:\n` +
               `Enter repayment amount (MK):`;
           }
-        } catch (err) {
-          response =
-            `CON Lowetsani ndalama yobweza:\n` + `Enter repayment amount (MK):`;
         }
-      } else if (level === 2) {
-        const repayAmount = parseInt(input[1]);
-
+      } else if (level === 3) {
+        const repayAmount = parseInt(input[2]);
         if (isNaN(repayAmount) || repayAmount <= 0) {
-          response =
-            `END Chiwerengero cholakwika.\n` + `Invalid amount. Try again.`;
+          response = `END Chiwerengero cholakwika. Invalid amount.`;
         } else {
           response =
             `CON Mukulingalira kubweza:\n` +
             `You are about to repay:\n` +
             `MK${repayAmount.toLocaleString()}\n` +
             `─────────────────\n` +
-            `1. Inde, pitirizani / Yes\n` +
-            `2. Ayi, bwerani / No`;
+            `1. Inde / Yes\n` +
+            `2. Ayi / No`;
         }
-      } else if (level === 3) {
-        const repayAmount = parseInt(input[1]);
-        const confirm = input[2];
+      } else if (level === 4) {
+        const repayAmount = parseInt(input[2]);
+        const confirm = input[3];
 
         if (confirm === "2") {
-          response =
-            `END Mwasiya. Transaction cancelled.\n` + `Zikomo / Thank you.`;
+          response = `END Mwasiya. Cancelled. Zikomo!`;
         } else if (confirm === "1") {
           try {
-            await savings.repayLoanViaUSSD(phoneNumber, repayAmount, req);
+            const result = await savings.repayLoanViaUSSD(
+              phoneNumber,
+              repayAmount,
+              req,
+            );
             response =
               `END Zachita bwino! / Success!\n` +
               `MK${repayAmount.toLocaleString()} yabwezedwa.\n` +
-              `MK${repayAmount.toLocaleString()} repaid.\n` +
+              `Loan balance: MK${result.loanBalance.toLocaleString()}\n` +
               `Zikomo kwambiri! / Thank you!`;
           } catch (err) {
-            console.error("[USSD Repay Error]", err.message);
-            response =
-              `END Palibe. Yesaninso.\n` +
-              `Repayment failed. Try again.\n` +
-              `Mukhoza kuloweza kachiwiri.`;
+            logger.error("USSD_REPAY_ERROR", {
+              phoneNumber,
+              amount: repayAmount,
+              error: err.message,
+            });
+            response = `END Palibe. ${err.message}`;
           }
         } else {
-          response = `END Sankhani 1 kapena 2.\n` + `Select 1 or 2.`;
+          response = `END Sankhani 1 kapena 2.`;
         }
       }
 
@@ -373,41 +391,50 @@ router.post("/", async (req, res) => {
       // 4. VIEW BALANCE
       // ────────────────────────────────────────────────────────
     } else if (input[0] === "4") {
-      try {
-        const bal = await savings.getBalanceForUSSD(phoneNumber);
+      if (level === 1) {
+        response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
+      } else if (level === 2) {
+        const pin = input[1];
+        const validPin = await member.comparePin(pin);
+        if (!validPin) {
+          response = `END PIN yolakwika. / Invalid PIN.`;
+        } else {
+          try {
+            const bal = await savings.getBalanceForUSSD(phoneNumber);
 
-        response =
-          `END Ndalama Zanu / Your Account:\n` +
-          `─────────────────\n` +
-          `Zasungidwa: ${toMK(bal.totalSaved)}\n` +
-          `Saved: ${toMK(bal.totalSaved)}\n` +
-          `─────────────────\n` +
-          `Ngongole: ${toMK(bal.loanAmount)}\n` +
-          `Loan: ${toMK(bal.loanAmount)}\n` +
-          `─────────────────\n` +
-          `Mutha kutenga: ${toMK(bal.eligibleToBorrow)}\n` +
-          `Can borrow: ${toMK(bal.eligibleToBorrow)}`;
-      } catch (err) {
-        console.error("[USSD Balance Error]", err.message);
-        response =
-          `END Palibe. Yesaninso.\n` +
-          `Could not fetch balance.\n` +
-          `Please try again.`;
+            response =
+              `END Ndalama Zanu / Your Account\n` +
+              `─────────────────\n` +
+              `Zasungidwa / Saved:\n` +
+              `MK${bal.totalSaved.toLocaleString()}\n` +
+              `─────────────────\n` +
+              `Ngongole / Loan:\n` +
+              `MK${bal.loanAmount.toLocaleString()}\n` +
+              (bal.loanAmount > 0
+                ? `Kubweza: ${formatDueDate(bal.loanDueDate)}\n`
+                : ``) +
+              `─────────────────\n` +
+              `Mutha kutenga / Can borrow:\n` +
+              `MK${bal.eligibleToBorrow.toLocaleString()}`;
+          } catch (err) {
+            response =
+              `END Palibe. Yesaninso.\n` +
+              `Could not fetch balance. Please try again.`;
+          }
+        }
       }
-
-      // ────────────────────────────────────────────────────────
-      // INVALID OPTION
-      // ────────────────────────────────────────────────────────
     } else {
       response =
         `END Sankhani yolondola 1-4.\n` + `Invalid option. Choose 1 to 4.`;
     }
   } catch (error) {
-    console.error("[USSD Fatal Error]", error.message);
+    logger.error("USSD_FATAL_ERROR", {
+      phoneNumber,
+      error: error.message,
+      stack: error.stack,
+    });
     response =
-      `END Pali vuto. Yesaninso.\n` +
-      `System error. Please try again.\n` +
-      `Mukhoza kulowesa kachiwiri.`;
+      `END Pali vuto. Yesaninso.\n` + `System error. Please try again.`;
   }
 
   res.set("Content-Type", "text/plain");

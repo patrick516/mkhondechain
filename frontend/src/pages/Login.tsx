@@ -55,7 +55,7 @@ export default function Login() {
           MkhondeChain
         </h1>
         <p className="text-blue-200 text-lg text-center max-w-sm leading-relaxed">
-          Village Savings on the Blockchain
+          Village Savings on Digital Finance
         </p>
 
         {/* Divider */}
@@ -65,7 +65,7 @@ export default function Login() {
         <div className="space-y-4 w-full max-w-sm">
           {[
             { icon: "📱", text: "USSD access for any phone" },
-            { icon: "🔗", text: "Blockchain-secured records" },
+
             { icon: "💸", text: "Airtel Money & TNM Mpamba" },
             { icon: "👩‍👩‍👧", text: "Built for Malawian communities" },
           ].map((item) => (
@@ -91,7 +91,7 @@ export default function Login() {
           />
           <h1 className="text-2xl font-bold text-primary">MkhondeChain</h1>
           <p className="text-gray-500 text-sm">
-            Village Savings on the Blockchain
+            Village Savings on Digital Finance
           </p>
         </div>
 

@@ -1,9 +1,16 @@
+// ─────────────────────────────────────────────────────────────
+// Create Admin Script
+// Creates an admin account with secure password hashing.
+// Uses bcrypt (native) via the Admin model's pre-save hook.
+// ─────────────────────────────────────────────────────────────
+
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
 const readline = require("readline");
 require("dotenv").config();
 
 const Admin = require("../models/Admin");
+const Group = require("../models/Group");
+const logger = require("../utils/logger");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -16,7 +23,7 @@ const ask = (question) =>
 async function createAdmin() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log(" Connected to MongoDB\n");
+    logger.info("CREATE_ADMIN_CONNECTED");
 
     // Check if any admin already exists
     const existing = await Admin.countDocuments();
@@ -32,10 +39,24 @@ async function createAdmin() {
     }
 
     const username = await ask("Enter admin username: ");
-    const password = await ask("Enter admin password (min 8 characters): ");
+    const fullName = await ask("Enter full name: ");
+    const password = await ask(
+      "Enter admin password (min 8 chars, mixed case + number): ",
+    );
 
+    // Optional: assign to group
+    const groupId = await ask(
+      "Enter group ID (or leave blank for superadmin): ",
+    );
+
+    // Validation
     if (!username || username.trim().length < 3) {
       console.error(" Username must be at least 3 characters.");
+      process.exit(1);
+    }
+
+    if (!fullName || fullName.trim().length < 2) {
+      console.error(" Full name is required.");
       process.exit(1);
     }
 
@@ -44,24 +65,60 @@ async function createAdmin() {
       process.exit(1);
     }
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(password.trim(), 12);
+    // Password strength check
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    if (!hasUpper || !hasLower || !hasNumber) {
+      console.error(
+        " Password must contain uppercase, lowercase, and a number.",
+      );
+      process.exit(1);
+    }
 
+    // Validate group if provided
+    let assignedGroupId = null;
+    let role = "superadmin";
+
+    if (groupId && groupId.trim()) {
+      const group = await Group.findById(groupId.trim());
+      if (!group) {
+        console.error(" Group not found. Please create the group first.");
+        process.exit(1);
+      }
+      assignedGroupId = group._id;
+      role = "admin";
+    }
+
+    // Create admin — passwordHash will be auto-hashed by model's pre-save hook
+    // We pass the plaintext password as passwordHash, the hook handles it
     const admin = await Admin.create({
       username: username.trim().toLowerCase(),
-      passwordHash,
-      role: "admin",
+      passwordHash: password.trim(), // pre-save hook will hash this
+      fullName: fullName.trim(),
+      role,
+      groupId: assignedGroupId,
     });
 
     console.log(`\n Admin created successfully!`);
     console.log(`   Username: ${admin.username}`);
+    console.log(`   Full Name: ${admin.fullName}`);
     console.log(`   Role:     ${admin.role}`);
+    if (assignedGroupId) {
+      console.log(`   Group:    ${assignedGroupId}`);
+    }
     console.log(`\n You can now log in at: POST /api/auth/login`);
+
+    logger.info("ADMIN_CREATED", {
+      username: admin.username,
+      role: admin.role,
+    });
   } catch (err) {
     if (err.code === 11000) {
       console.error(" That username already exists. Choose a different one.");
     } else {
       console.error(" Error creating admin:", err.message);
+      logger.error("CREATE_ADMIN_ERROR", { error: err.message });
     }
     process.exit(1);
   } finally {

@@ -7,40 +7,59 @@ export default function AddMember() {
   const [surname, setSurname] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
-  const [ethAddress, setEthAddress] = useState("");
+  const [pin, setPin] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const formatPhoneNumber = (input: string): string => {
     const trimmed = input.trim();
     if (trimmed.startsWith("0")) {
       return "+265" + trimmed.substring(1);
     }
-    return trimmed; // assume already valid
+    return trimmed;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!pin || pin.length < 4 || pin.length > 6) {
+      toast.error("PIN must be 4-6 digits");
+      return;
+    }
+
+    if (!groupId) {
+      toast.error("Please enter a group ID");
+      return;
+    }
+
+    setLoading(true);
     try {
       const formattedPhone = formatPhoneNumber(phone);
 
       const res = await axios.post("/members", {
-        firstName,
-        surname,
+        firstName: firstName.trim(),
+        surname: surname.trim(),
         phone: formattedPhone,
         gender,
-        ethAddress,
+        pin,
+        groupId,
       });
 
-      console.log("Member created:", res.data);
-      toast.success("Member added successfully!");
+      toast.success(
+        `Member ${res.data.firstName} ${res.data.surname} added successfully!`,
+      );
       setFirstName("");
       setSurname("");
       setPhone("");
       setGender("");
-      setEthAddress("");
+      setPin("");
+      setGroupId("");
     } catch (error: any) {
+      const message = error?.response?.data?.error || "Failed to add member";
+      toast.error(message);
       console.error("Error adding member:", error.message);
-      toast.error("Failed to add member");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -83,6 +102,7 @@ export default function AddMember() {
               <option value="">Select...</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
@@ -92,6 +112,7 @@ export default function AddMember() {
             </label>
             <input
               className="w-full p-2 border rounded"
+              placeholder="0999123456 or +265999123456"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
@@ -100,20 +121,42 @@ export default function AddMember() {
 
           <div>
             <label className="block mb-1 text-sm font-medium">
-              Wallet Address (optional)
+              USSD PIN (4-6 digits)
             </label>
             <input
+              type="password"
+              maxLength={6}
               className="w-full p-2 border rounded"
-              value={ethAddress}
-              onChange={(e) => setEthAddress(e.target.value)}
+              placeholder="e.g. 1234"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+              required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Member will use this PIN to authenticate USSD transactions
+            </p>
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm font-medium">Group ID</label>
+            <input
+              className="w-full p-2 border rounded"
+              placeholder="Paste group ID from admin dashboard"
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Ask your superadmin for the group ID
+            </p>
           </div>
 
           <button
-            className="px-4 py-2 text-white rounded bg-primary"
+            className="w-full px-4 py-2 text-white rounded bg-primary hover:opacity-90 disabled:opacity-50"
             type="submit"
+            disabled={loading}
           >
-            Save Member
+            {loading ? "Saving..." : "Save Member"}
           </button>
         </form>
       </div>

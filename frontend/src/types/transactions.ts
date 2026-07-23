@@ -2,10 +2,12 @@ export interface MemberSummary {
   _id: string;
   firstName: string;
   surname: string;
-  borrowed: number;
-  repaid: number;
-  paidStatus: "Yes" | "No" | "Partial";
-  debtor: number;
-  interest: number;
-  totalAmount: number;
+  phone: string;
+  balance: number;
+  loanBalance: number;
+  totalSaved: number;
+  totalBorrowed: number;
+  totalRepaid: number;
+  totalInterest: number;
+  netPosition: number;
 }

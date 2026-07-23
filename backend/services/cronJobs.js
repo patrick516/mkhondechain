@@ -1,35 +1,22 @@
-// ─────────────────────────────────────────────────────────────
-// Cron Jobs — MkhondeChain
-// Runs automatically in the background on schedule.
-//
-// Job 1: Saving Window Manager  — runs daily at midnight
-// Job 2: Inactive Member Check  — runs daily at 1am
-// Job 3: Audit Transparency Day — runs on 28th of every month
-// ─────────────────────────────────────────────────────────────
-
 const cron = require("node-cron");
 const SystemSetting = require("../models/systemSettingModel");
 const Member = require("../models/memberModel");
 const Transaction = require("../models/transactionModel");
 const sendSms = require("../utils/africasTalkingSms");
+const { ethers } = require("ethers");
+const contract = require("./contract");
+const userService = require("./userService");
 
 // ─────────────────────────────────────────────────────────────
 // JOB 1: Saving Window Manager (Daily at midnight)
-// Opens and closes the saving window on a 5-day cycle.
-// Rewards 5% interest to members who saved during the window.
 // ─────────────────────────────────────────────────────────────
-
 cron.schedule("0 0 * * *", async () => {
-  console.log("[Cron Job 1] Saving window check running...");
-
+  console.log("[Cron Job 1] Saving window check...");
   try {
     let setting = await SystemSetting.findOne();
     if (!setting) {
-      setting = await SystemSetting.create({
-        savingWindowOpen: true,
-        lastOpenedAt: new Date(),
-      });
-      console.log("[Cron Job 1] First saving window created and opened.");
+      setting = await SystemSetting.create({});
+      console.log("[Cron Job 1] First saving window created.");
       return;
     }
 
@@ -38,7 +25,6 @@ cron.schedule("0 0 * * *", async () => {
       (now - new Date(setting.lastOpenedAt)) / (1000 * 60 * 60 * 24),
     );
 
-    // Close window after 1 day and reward interest
     if (setting.savingWindowOpen && daysSince >= 1) {
       setting.savingWindowOpen = false;
       await setting.save();
@@ -56,60 +42,44 @@ cron.schedule("0 0 * * *", async () => {
         const interestAmount = Math.floor(saver.totalSaved * 0.05);
         if (interestAmount <= 0) continue;
 
-        // FIX: method must match transactionModel enum
         await Transaction.create({
           member: saver._id,
           type: "interest",
           amount: interestAmount,
-          method: "Admin", // System-generated, using Admin as closest enum value
+          method: "Admin",
           note: "Interest reward for saving activity",
           status: "success",
         });
 
         const member = await Member.findById(saver._id);
         if (member?.phone) {
-          // Bilingual SMS
           await sendSms(
             member.phone,
-            `MkhondeChain: Mwapeza chiwongolero! MK${interestAmount.toLocaleString()} yawonjezedwa.\n` +
+            `MkhondeChain: Mwapeza chiwongolero cha MK${interestAmount.toLocaleString()}!\n` +
               `You earned MK${interestAmount.toLocaleString()} interest. Zikomo!`,
-          );
-          console.log(
-            `[Cron Job 1] Interest MK${interestAmount} sent to ${member.firstName}`,
           );
         }
       }
-
-      if (activeSavers.length === 0) {
-        console.log(
-          "[Cron Job 1] No savers qualified for interest this cycle.",
-        );
-      }
     }
 
-    // Open new window after 5 days
     if (!setting.savingWindowOpen && daysSince >= 5) {
       setting.savingWindowOpen = true;
       setting.lastOpenedAt = now;
       await setting.save();
-      console.log("[Cron Job 1] Saving window opened.");
 
       const members = await Member.find({ phone: { $exists: true } });
       for (const member of members) {
         if (member?.phone) {
-          // Bilingual SMS
           await sendSms(
             member.phone,
-            `MkhondeChain: Lero ndilo tsiku losungira! Sungani ndalama lero.\n` +
-              `Group saving day is OPEN today! Save now to stay active.`,
+            `MkhondeChain: Lero ndilo tsiku losungira!\n` +
+              `Group saving day is OPEN today! Save now.`,
           );
         }
       }
       console.log(
-        `[Cron Job 1] ${members.length} members notified of open window.`,
+        `[Cron Job 1] Window opened. ${members.length} members notified.`,
       );
-    } else if (!setting.savingWindowOpen) {
-      console.log("[Cron Job 1] Window still closed. No changes today.");
     }
   } catch (err) {
     console.error("[Cron Job 1] Error:", err.message);
@@ -117,26 +87,96 @@ cron.schedule("0 0 * * *", async () => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// JOB 2: Inactive Member Warning & Cleanup (Daily at 1am)
-// Warns members inactive for 25 days.
-// Removes members inactive for 30+ days with zero balance.
+// JOB 2: Loan Repayment Reminders (Daily at 8am)
+// Sends reminders at 5 days, 2 days, and 1 day before due date
 // ─────────────────────────────────────────────────────────────
+cron.schedule("0 8 * * *", async () => {
+  console.log("[Cron Job 2] Loan repayment reminder check...");
 
+  try {
+    const members = await Member.find({ phone: { $exists: true } });
+
+    for (const member of members) {
+      try {
+        const address = await userService.getWalletAddressByPhone(member.phone);
+        if (!address) continue;
+
+        const [, loanAmount, loanDueDate] = await contract.getBalance(address);
+        const loan = parseFloat(ethers.utils.formatEther(loanAmount)) * 1000;
+
+        if (loan <= 0) continue; // No active loan
+
+        const dueDate = new Date(Number(loanDueDate) * 1000);
+        const now = new Date();
+        const daysLeft = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+
+        // Send reminder at 5, 2, and 1 day before due date
+        if (daysLeft === 5) {
+          await sendSms(
+            member.phone,
+            `MkhondeChain: ${member.firstName}, ngongole yanu ya MK${Math.floor(loan).toLocaleString()} ibwere mu masiku 5.\n` +
+              `Reminder: Your loan of MK${Math.floor(loan).toLocaleString()} is due in 5 days (${dueDate.toDateString()}).`,
+          );
+          console.log(
+            `[Cron Job 2] 5-day reminder sent to ${member.firstName}`,
+          );
+        } else if (daysLeft === 2) {
+          await sendSms(
+            member.phone,
+            `MkhondeChain: ${member.firstName}, ngongole yanu ya MK${Math.floor(loan).toLocaleString()} ibwere mu masiku 2!\n` +
+              `Urgent: Your loan of MK${Math.floor(loan).toLocaleString()} is due in 2 days (${dueDate.toDateString()}).`,
+          );
+          console.log(
+            `[Cron Job 2] 2-day reminder sent to ${member.firstName}`,
+          );
+        } else if (daysLeft === 1) {
+          await sendSms(
+            member.phone,
+            `MkhondeChain: ${member.firstName}, MAWA mubweze ngongole ya MK${Math.floor(loan).toLocaleString()}!\n` +
+              `URGENT: Your loan of MK${Math.floor(loan).toLocaleString()} is due TOMORROW! Repay via *384*48982#.`,
+          );
+          console.log(
+            `[Cron Job 2] 1-day reminder sent to ${member.firstName}`,
+          );
+        } else if (daysLeft <= 0) {
+          await sendSms(
+            member.phone,
+            `MkhondeChain: ${member.firstName}, ngongole yanu ya MK${Math.floor(loan).toLocaleString()} yatha tsiku lake!\n` +
+              `OVERDUE: Your loan of MK${Math.floor(loan).toLocaleString()} is overdue! Repay now via *384*48982#.`,
+          );
+          console.log(
+            `[Cron Job 2] Overdue notice sent to ${member.firstName}`,
+          );
+        }
+      } catch (memberErr) {
+        console.error(
+          `[Cron Job 2] Error for ${member.firstName}:`,
+          memberErr.message,
+        );
+      }
+    }
+
+    console.log("[Cron Job 2] Repayment reminder check complete.");
+  } catch (err) {
+    console.error("[Cron Job 2] Error:", err.message);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// JOB 3: Inactive Member Warning & Cleanup (Daily at 1am)
+// ─────────────────────────────────────────────────────────────
 cron.schedule("0 1 * * *", async () => {
-  console.log("[Cron Job 2] Inactive member check running...");
-
+  console.log("[Cron Job 3] Inactive member check...");
   try {
     const members = await Member.find();
 
-    // Find top saver to set the activity threshold
     const topSaverAgg = await Transaction.aggregate([
       { $match: { type: "save" } },
       { $group: { _id: "$member", total: { $sum: "$amount" } } },
       { $sort: { total: -1 } },
       { $limit: 1 },
     ]);
-    const topSaved = topSaverAgg[0]?.total || 0;
-    const requiredAmount = Math.ceil(topSaved / 4);
+    const requiredAmount = Math.ceil((topSaverAgg[0]?.total || 0) / 4);
 
     for (const member of members) {
       try {
@@ -149,17 +189,14 @@ cron.schedule("0 1 * * *", async () => {
           (Date.now() - lastActive.getTime()) / (1000 * 60 * 60 * 24),
         );
 
-        // Warning at 25 days
         if (daysInactive === 25 && member?.phone) {
           await sendSms(
             member.phone,
             `MkhondeChain: ${member.firstName}, simugwira ntchito kwa masiku 25.\n` +
-              `You have been inactive for 25 days. Save at least MK${requiredAmount.toLocaleString()} within 5 days to remain active.`,
+              `You have been inactive for 25 days. Save at least MK${requiredAmount.toLocaleString()} within 5 days.`,
           );
-          console.log(`[Cron Job 2] Warning sent to ${member.firstName}`);
         }
 
-        // Cleanup at 30+ days — only if zero savings and zero loans
         if (daysInactive >= 30) {
           const [borrowed] = await Transaction.aggregate([
             { $match: { member: member._id, type: "borrow" } },
@@ -177,62 +214,44 @@ cron.schedule("0 1 * * *", async () => {
           const outstandingLoan = (borrowed?.total || 0) - (repaid?.total || 0);
           const totalSavings = saved?.total || 0;
 
-          // Only delete if truly zero — no savings, no outstanding loan
           if (outstandingLoan === 0 && totalSavings === 0) {
             await Member.findByIdAndDelete(member._id);
             await Transaction.deleteMany({ member: member._id });
             console.log(
-              `[Cron Job 2] Removed ${member.firstName} — inactive 30+ days, zero balance.`,
-            );
-          } else {
-            console.log(
-              `[Cron Job 2] ${member.firstName} inactive but has balance — not removed.`,
+              `[Cron Job 3] Removed ${member.firstName} — inactive, zero balance.`,
             );
           }
         }
       } catch (memberErr) {
-        // Don't let one member error stop the whole job
         console.error(
-          `[Cron Job 2] Error processing ${member.firstName}:`,
+          `[Cron Job 3] Error for ${member.firstName}:`,
           memberErr.message,
         );
       }
     }
-
-    console.log("[Cron Job 2] Inactive member check complete.");
+    console.log("[Cron Job 3] Inactive check complete.");
   } catch (err) {
-    console.error("[Cron Job 2] Error:", err.message);
+    console.error("[Cron Job 3] Error:", err.message);
   }
 });
 
 // ─────────────────────────────────────────────────────────────
-// JOB 3: Audit Transparency Day SMS (28th of every month)
-// Reminds all members to verify their records with group leader.
+// JOB 4: Audit Transparency Day SMS (28th of every month)
 // ─────────────────────────────────────────────────────────────
-
 cron.schedule("0 10 28 * *", async () => {
-  console.log("[Cron Job 3] Audit Transparency Day SMS running...");
-
+  console.log("[Cron Job 4] Audit Day SMS...");
   try {
     const members = await Member.find({ phone: { $exists: true } });
-    let sent = 0;
-
     for (const member of members) {
       if (!member?.phone) continue;
-
-      // Bilingual SMS
       await sendSms(
         member.phone,
         `MkhondeChain: Lero ndilo tsiku la Audit!\n` +
-          `Today is Audit Transparency Day.\n` +
-          `Pitani kwa mtsogoleri wa gulu lanu kuyonetsa ndalama zanu.\n` +
-          `Visit your group leader to verify your savings & loan record.`,
+          `Today is Audit Day. Visit your group leader to verify your savings & loan record.`,
       );
-      sent++;
     }
-
-    console.log(`[Cron Job 3] Audit Day SMS sent to ${sent} members.`);
+    console.log(`[Cron Job 4] Audit SMS sent to ${members.length} members.`);
   } catch (err) {
-    console.error("[Cron Job 3] Error:", err.message);
+    console.error("[Cron Job 4] Error:", err.message);
   }
 });

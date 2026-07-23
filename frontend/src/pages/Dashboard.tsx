@@ -2,13 +2,12 @@ import { useState, useEffect } from "react";
 import { io } from "socket.io-client";
 import StatsSection from "@/components/tables/StatsSection";
 import ActivityTable from "@/components/tables/ActivityTable";
-// import LoanRequestTable from "@/components/tables/LoanRequestTable";
 import RejectModal from "@/components/tables/RejectModal";
-import axios from "@/api/axios";
-import toast from "react-hot-toast";
 import { fetchDashboardStats, fetchRecentActivity } from "@/api/dashboard";
 import { fetchPendingLoanRequests } from "@/api/dashboard";
 import LoanRequestTable from "@/components/tables/LoanRequestTable";
+import { approveLoan, rejectLoan } from "@/api/payments";
+import toast from "react-hot-toast";
 
 import type {
   StatItem,
@@ -17,7 +16,6 @@ import type {
 } from "@/types/dashboard";
 
 export default function Dashboard() {
-  const [approvedTotal, setApprovedTotal] = useState(80000);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingRequest, setRejectingRequest] =
     useState<LoanRequestItem | null>(null);
@@ -30,6 +28,7 @@ export default function Dashboard() {
   ]);
 
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [loanRequests, setLoanRequests] = useState<LoanRequestItem[]>([]);
 
   useEffect(() => {
     fetchPendingLoanRequests().then(setLoanRequests).catch(console.error);
@@ -39,10 +38,6 @@ export default function Dashboard() {
         console.error("Failed to fetch activity:", err.message);
       });
   }, []);
-
-  const [loanLog, setLoanLog] = useState<LoanRequestItem[]>([]);
-
-  const [loanRequests, setLoanRequests] = useState<LoanRequestItem[]>([]);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -69,73 +64,71 @@ export default function Dashboard() {
             bg: "bg-red-600",
           },
         ]);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error refreshing dashboard stats:", err.message);
       }
     };
 
-    loadStats(); // initial load
-
-    const interval = setInterval(loadStats, 15000); // every 15s
-    return () => clearInterval(interval); // cleanup
+    loadStats();
+    const interval = setInterval(loadStats, 15000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleApprove = (request: LoanRequestItem) => {
-    setLoanRequests((prev) => prev.filter((r) => r !== request));
+  const handleApprove = async (request: LoanRequestItem) => {
+    try {
+      await approveLoan(request.transactionId);
+      setLoanRequests((prev) =>
+        prev.filter((r) => r.transactionId !== request.transactionId),
+      );
 
-    const numericAmount = Number(request.amount.replace(/[^\d]/g, ""));
-    setApprovedTotal((prev) => prev + numericAmount);
+      setActivities((prev) => [
+        {
+          member: request.member,
+          action: "Borrowed",
+          amount: `MK ${request.amount.toLocaleString()}`,
+          status: "success",
+          date: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
 
-    setActivities((prev) => [
-      ...prev,
-      {
-        member: request.member,
-        action: "Borrowed",
-        amount: request.amount,
-        date: new Date().toISOString().slice(0, 10),
-      },
-    ]);
-
-    toast.success(`Loan approved for ${request.member}`);
+      toast.success(`Loan approved for ${request.member}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Failed to approve loan");
+    }
   };
 
-  const handleReject = (item: LoanRequestItem, reason: string) => {
-    const updatedRequest = {
-      ...item,
-      status: "Rejected",
-      rejectionReason: reason,
-    };
+  const handleReject = async (item: LoanRequestItem, reason: string) => {
+    try {
+      await rejectLoan(item.transactionId, reason);
+      setLoanRequests((prev) =>
+        prev.filter((r) => r.transactionId !== item.transactionId),
+      );
 
-    setLoanRequests((prev) => prev.filter((r) => r !== item));
+      setActivities((prev) => [
+        {
+          member: item.member,
+          action: "Rejected",
+          amount: `MK ${item.amount.toLocaleString()}`,
+          status: "failed",
+          date: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
 
-    setActivities((prev) => [
-      ...prev,
-      {
-        member: updatedRequest.member,
-        action: "Rejected",
-        amount: updatedRequest.amount,
-        date: new Date().toISOString().slice(0, 10),
-      },
-    ]);
-
-    axios
-      .post("/loans/reject", {
-        phoneNumber: item.memberPhone,
-        amount: item.amount,
-        reason,
-      })
-      .then(() => console.log("SMS sent"))
-      .catch((err) => console.error("SMS failed", err.message));
-
-    setRejectingRequest(null);
-    setShowRejectModal(false);
-
-    toast(`Loan rejected for ${item.member}`);
+      toast(`Loan rejected for ${item.member}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Failed to reject loan");
+    } finally {
+      setRejectingRequest(null);
+      setShowRejectModal(false);
+    }
   };
 
   useEffect(() => {
     const socket = io(
-      import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:4000",
+      { auth: { token: localStorage.getItem("mkhonde_token") } },
     );
 
     socket.on("connect", () => {
@@ -167,70 +160,7 @@ export default function Dashboard() {
           },
         ]);
       });
-
       fetchRecentActivity().then(setActivities);
-    });
-
-    // Listen for real-time loan requests
-    socket.on("loan:request", async (request) => {
-      console.log("New loan request received via socket:", request);
-
-      const numericAmount = Number(request.amount.replace(/[^\d]/g, ""));
-
-      try {
-        const res = await axios.get(
-          `/contract/eligible-to-borrow/${request.wallet}`
-        );
-        const eligibleMWK = res.data.eligibleMWK;
-
-        if (numericAmount <= eligibleMWK) {
-          console.log("Auto-approving loan for", request.member);
-
-          // Add to auto-loan history
-          setLoanLog((prev) => [
-            {
-              ...request,
-              status: "Approved",
-              date: new Date().toISOString(),
-            },
-            ...prev.slice(0, 9),
-          ]);
-
-          // Still push to Recent Activity (optional)
-          setActivities((prev) => [
-            {
-              member: request.member,
-              action: "Borrowed",
-              amount: request.amount,
-              date: new Date().toISOString(),
-            },
-            ...prev.slice(0, 9),
-          ]);
-
-          toast.success(`Loan approved for ${request.member}`);
-        } else {
-          console.log("Auto-rejecting loan for", request.member);
-
-          setLoanLog((prev) => [
-            {
-              ...request,
-              status: "Rejected",
-              date: new Date().toISOString(),
-            },
-            ...prev.slice(0, 9),
-          ]);
-
-          await axios.post("/loans/reject", {
-            phoneNumber: request.memberPhone,
-            amount: request.amount,
-            reason: "Exceeds 80% of allowed savings",
-          });
-
-          toast.error(`Loan rejected for ${request.member}`);
-        }
-      } catch (err) {
-        console.error("Failed to auto-process loan request:", err.message);
-      }
     });
 
     return () => {
@@ -245,20 +175,19 @@ export default function Dashboard() {
       <StatsSection stats={stats} />
 
       <h2 className="mt-10 mb-4 text-lg font-semibold">
-        Loan Requests as of <strong>{new Date().toDateString()}</strong>
+        Pending Loan Requests
       </h2>
       <LoanRequestTable
         data={loanRequests}
+        onApprove={handleApprove}
         onReject={(item) => {
           setRejectingRequest(item);
           setShowRejectModal(true);
         }}
       />
-      <p className="text-gray-600">
-        All loans are automatically approved or rejected based on blockchain
-        eligibility.
+      <p className="text-sm text-gray-500 mt-2">
+        Loans require group leader approval before disbursement.
       </p>
-      <LoanRequestTable data={loanLog} />
 
       <h2 className="mt-10 mb-4 text-lg font-semibold">Recent Activity</h2>
       <ActivityTable data={activities} />

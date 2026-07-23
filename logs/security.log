@@ -1,0 +1,1 @@
+{"error":"Cast to ObjectId failed for value \"1234\" (type string) at path \"_id\" for model \"Admin\"","level":"error","message":"CREATE_GROUP_ERROR","service":"mkhondechain","timestamp":"2026-07-23 12:25:02"}

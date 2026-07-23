@@ -1,8 +1,10 @@
+import type { ReactNode } from "react";
+
 export interface StatItem {
   label: string;
   value: string;
   bg?: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
 }
 
 export interface ActivityItem {
@@ -14,12 +16,13 @@ export interface ActivityItem {
 }
 
 export interface LoanRequestItem {
+  transactionId: string;
+  reference: string;
   member: string;
-
-  amount: string;
+  phone?: string;
+  amount: number;
   date: string;
-  status: "Pending" | "Approved" | "Rejected";
-  rejectionReason?: string;
+  status: "pending" | "success" | "failed" | "reversed";
 }
 
 export interface MemberPayload {
@@ -27,16 +30,18 @@ export interface MemberPayload {
   surname: string;
   phone: string;
   gender: string;
+  pin: string;
+  groupId: string;
 }
 
 export interface AuditLogItem {
+  id: string;
   action: string;
+  severity: "info" | "warning" | "critical";
   performedBy: string;
-  targetMember: string;
-  details: {
-    amount: string;
-    method: string;
-    wallet: string;
-  };
-  createdAt: string;
+  targetMember?: string;
+  group?: string;
+  details: Record<string, string>;
+  status: "success" | "failed";
+  date: string;
 }

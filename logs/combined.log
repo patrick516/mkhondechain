@@ -1,0 +1,5 @@
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-07-23 10:28:26"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-07-23 10:28:26"}
+{"level":"info","message":"MONGODB_CONNECTED","service":"mkhondechain","timestamp":"2026-07-23 10:28:26"}
+{"level":"info","message":"CREATE_GROUP_CONNECTED","service":"mkhondechain","timestamp":"2026-07-23 12:24:20"}
+{"error":"Cast to ObjectId failed for value \"1234\" (type string) at path \"_id\" for model \"Admin\"","level":"error","message":"CREATE_GROUP_ERROR","service":"mkhondechain","timestamp":"2026-07-23 12:25:02"}

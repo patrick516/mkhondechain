@@ -1,12 +1,13 @@
 export interface Transaction {
+  reference: string;
   date: string;
   type: string;
   amount: number;
-  repaid: number;
+  status: string;
   method: string;
+  beforeBalance: number;
+  afterBalance: number;
   note: string;
-  interest: number;
-  totalOnDay: number;
 }
 
 export interface Summary {
@@ -15,14 +16,14 @@ export interface Summary {
   totalOwing: number;
   totalSavings: number;
   totalInterest: number;
-  totalWithInterest: number;
-  conclusion: string;
+  netPosition: number;
 }
 
 export interface MemberDetails {
   fullName: string;
   phone: string;
   gender: string;
-  ethAddress: string;
+  balance: number;
+  loanBalance: number;
   joined: string;
 }
