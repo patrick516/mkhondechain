@@ -11,46 +11,57 @@ export const transactionColumns = [
   columnHelper.accessor("surname", {
     header: "Surname",
   }),
-  columnHelper.accessor("borrowed", {
+  columnHelper.accessor("totalSaved", {
+    header: "Total Saved",
+    cell: (info) => `MK ${Number(info.getValue()).toLocaleString()}`,
+  }),
+  columnHelper.accessor("totalBorrowed", {
     header: "Borrowed",
     cell: (info) => `MK ${Number(info.getValue()).toLocaleString()}`,
   }),
-  columnHelper.accessor("repaid", {
+  columnHelper.accessor("totalRepaid", {
     header: "Repaid",
     cell: (info) => `MK ${Number(info.getValue()).toLocaleString()}`,
   }),
-  columnHelper.accessor("paidStatus", {
-    header: "Paid",
+  columnHelper.accessor("loanBalance", {
+    header: "Outstanding Loan",
     cell: (info) => {
-      const status = info.getValue();
+      const value = Number(info.getValue());
+      return value > 0 ? `MK ${value.toLocaleString()}` : "-";
+    },
+  }),
+  columnHelper.display({
+    id: "paidStatus",
+    header: "Status",
+    cell: (info) => {
+      const m = info.row.original;
+      let status: "Yes" | "Partial" | "No" = "Yes";
+      if (m.totalBorrowed > 0) {
+        if (m.loanBalance === 0) status = "Yes";
+        else if (m.totalRepaid > 0) status = "Partial";
+        else status = "No";
+      }
       return (
         <span
           className={`font-bold ${
             status === "Yes"
               ? "text-green-600"
               : status === "Partial"
-              ? "text-yellow-600"
-              : "text-red-600"
+                ? "text-yellow-600"
+                : "text-red-600"
           }`}
         >
-          {status}
+          {m.totalBorrowed > 0 ? status : "-"}
         </span>
       );
     },
   }),
-  columnHelper.accessor("debtor", {
-    header: "Debtor",
-    cell: (info) =>
-      info.getValue() > 0
-        ? `MK ${Number(info.getValue()).toLocaleString()}`
-        : "-",
-  }),
-  columnHelper.accessor("interest", {
+  columnHelper.accessor("totalInterest", {
     header: "Interest",
     cell: (info) => `MK ${Number(info.getValue()).toLocaleString()}`,
   }),
-  columnHelper.accessor("totalAmount", {
-    header: "Total Amount",
+  columnHelper.accessor("netPosition", {
+    header: "Net Position",
     cell: (info) => `MK ${Number(info.getValue()).toLocaleString()}`,
   }),
   columnHelper.display({

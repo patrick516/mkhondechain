@@ -1,0 +1,77 @@
+// ─────────────────────────────────────────────────────────────
+// File: backend/prisma/models/audit.prisma
+// ─────────────────────────────────────────────────────────────
+// Audit Model
+// Immutable security and compliance log.
+// Every admin action and system event is recorded here.
+// ─────────────────────────────────────────────────────────────
+
+enum AuditAction {
+  LoginSuccess
+  LoginFailed
+  LoginLocked
+  Logout
+  MemberCreated
+  MemberUpdated
+  MemberDeleted
+  MemberPinReset
+  TransactionCreated
+  TransactionApproved
+  TransactionRejected
+  TransactionReversed
+  LoanDisbursed
+  LoanRepaid
+  SettingsUpdated
+  BroadcastSent
+  AdminCreated
+  AdminUpdated
+  UnauthorizedAccess
+  SystemError
+}
+
+enum AuditSeverity {
+  info
+  warning
+  critical
+}
+
+enum AuditStatus {
+  success
+  failed
+}
+
+model Audit {
+  id       String        @id @default(cuid())
+  action   AuditAction
+  severity AuditSeverity @default(info)
+
+  performedById   String?
+  performedBy     Admin?  @relation(fields: [performedById], references: [id])
+  performedByName String  @default("System")
+
+  targetMemberId    String?
+  targetMember      Member? @relation(fields: [targetMemberId], references: [id])
+  targetMemberPhone String?
+
+  groupId String?
+  group   Group?  @relation(fields: [groupId], references: [id])
+
+  // Flexible key-value details bag (was Mongoose Map<String>).
+  // Stored as Json since Postgres has no native Map type.
+  details Json?
+
+  ipAddress    String?
+  userAgent    String?
+  status       AuditStatus @default(success)
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([action, createdAt])
+  @@index([performedById, createdAt])
+  @@index([groupId, createdAt])
+  @@index([severity, createdAt])
+  @@index([createdAt])
+  @@map("audits")
+}

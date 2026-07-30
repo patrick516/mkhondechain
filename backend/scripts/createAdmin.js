@@ -1,16 +1,19 @@
-// ─────────────────────────────────────────────────────────────
 // Create Admin Script
 // Creates an admin account with secure password hashing.
-// Uses bcrypt (native) via the Admin model's pre-save hook.
+// Password is hashed here directly with bcrypt — Prisma models
+// have no pre-save hooks (unlike the old Mongoose model), so this
+// logic that used to live in Admin.js now lives in the script
+// (and in adminAuth.js / authController.js for login-time checks).
 // ─────────────────────────────────────────────────────────────
 
-const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
 const readline = require("readline");
 require("dotenv").config();
 
-const Admin = require("../models/Admin");
-const Group = require("../models/Group");
+const prisma = require("../utils/prismaClient");
 const logger = require("../utils/logger");
+
+const SALT_ROUNDS = 12;
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -22,11 +25,10 @@ const ask = (question) =>
 
 async function createAdmin() {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
     logger.info("CREATE_ADMIN_CONNECTED");
 
     // Check if any admin already exists
-    const existing = await Admin.countDocuments();
+    const existing = await prisma.admin.count();
     if (existing > 0) {
       console.log(" An admin account already exists.");
       const overwrite = await ask(
@@ -81,23 +83,28 @@ async function createAdmin() {
     let role = "superadmin";
 
     if (groupId && groupId.trim()) {
-      const group = await Group.findById(groupId.trim());
+      const group = await prisma.group.findUnique({
+        where: { id: groupId.trim() },
+      });
       if (!group) {
         console.error(" Group not found. Please create the group first.");
         process.exit(1);
       }
-      assignedGroupId = group._id;
+      assignedGroupId = group.id;
       role = "admin";
     }
 
-    // Create admin — passwordHash will be auto-hashed by model's pre-save hook
-    // We pass the plaintext password as passwordHash, the hook handles it
-    const admin = await Admin.create({
-      username: username.trim().toLowerCase(),
-      passwordHash: password.trim(), // pre-save hook will hash this
-      fullName: fullName.trim(),
-      role,
-      groupId: assignedGroupId,
+    // Hash password manually — no pre-save hook in Prisma
+    const passwordHash = await bcrypt.hash(password.trim(), SALT_ROUNDS);
+
+    const admin = await prisma.admin.create({
+      data: {
+        username: username.trim().toLowerCase(),
+        passwordHash,
+        fullName: fullName.trim(),
+        role,
+        groupId: assignedGroupId,
+      },
     });
 
     console.log(`\n Admin created successfully!`);
@@ -114,7 +121,7 @@ async function createAdmin() {
       role: admin.role,
     });
   } catch (err) {
-    if (err.code === 11000) {
+    if (err.code === "P2002") {
       console.error(" That username already exists. Choose a different one.");
     } else {
       console.error(" Error creating admin:", err.message);
@@ -123,11 +130,11 @@ async function createAdmin() {
     process.exit(1);
   } finally {
     rl.close();
-    await mongoose.disconnect();
+    await prisma.$disconnect();
   }
 }
 
 createAdmin();
 
 // Enter admin username: Pkulinji
-// Enter admin password :admin1234
+// Enter admin password :Patricks123

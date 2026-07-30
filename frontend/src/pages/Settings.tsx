@@ -1,24 +1,77 @@
 import { useState, useEffect } from "react";
 import axios from "@/api/axios";
+import { fetchCycleStatus, startCycle } from "@/api/cycle";
+import type { CycleStatus } from "@/api/cycle";
+import SettingsTable from "@/components/settings/SettingsTable";
+import EditSettingsModal from "@/components/settings/EditSettingsModal";
+import DatePicker from "@/components/ui/DatePicker";
+import ShareoutModal from "@/components/cycle/ShareoutModal";
 import toast from "react-hot-toast";
 
 export default function Settings() {
   const [repayDays, setRepayDays] = useState<number>(30);
-  const [savedRepayDays, setSavedRepayDays] = useState<number>(30);
+  const [interestRate, setInterestRate] = useState<number>(10);
+  const [minSaveAmount, setMinSaveAmount] = useState<number>(100);
+  const [maxLoanPercent, setMaxLoanPercent] = useState<number>(50);
+
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [lastBroadcast, setLastBroadcast] = useState<string>("");
   const [lastBroadcastAt, setLastBroadcastAt] = useState<string>("");
   const [loadingSettings, setLoadingSettings] = useState(true);
-  const [savingRepay, setSavingRepay] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
-  // ── Load current settings ──────────────────────────────────
+  const [cycle, setCycle] = useState<CycleStatus | null>(null);
+  const [newCycleStartDate, setNewCycleStartDate] = useState<Date | null>(
+    new Date(),
+  );
+  const [newCycleEndDate, setNewCycleEndDate] = useState<Date | null>(null);
+  const [startingCycle, setStartingCycle] = useState(false);
+  const [shareoutOpen, setShareoutOpen] = useState(false);
+  const loadCycle = () => {
+    fetchCycleStatus()
+      .then(setCycle)
+      .catch(() => toast.error("Failed to load cycle status"));
+  };
+
+  const handleStartCycle = async () => {
+    if (!newCycleStartDate) {
+      toast.error("Please choose a start date");
+      return;
+    }
+    if (!newCycleEndDate) {
+      toast.error("Please choose an end date");
+      return;
+    }
+    if (newCycleEndDate <= newCycleStartDate) {
+      toast.error("End date must be after the start date");
+      return;
+    }
+    setStartingCycle(true);
+    try {
+      await startCycle(
+        newCycleStartDate.toISOString(),
+        newCycleEndDate.toISOString(),
+      );
+      toast.success("Cycle started");
+      setNewCycleStartDate(new Date());
+      setNewCycleEndDate(null);
+      loadCycle();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Failed to start cycle");
+    } finally {
+      setStartingCycle(false);
+    }
+  };
+
   useEffect(() => {
     axios
       .get("/dashboard/settings")
       .then((res) => {
         setRepayDays(res.data.repayDays || 30);
-        setSavedRepayDays(res.data.repayDays || 30);
+        setInterestRate(res.data.interestRate ?? 10);
+        setMinSaveAmount(res.data.minSaveAmount ?? 100);
+        setMaxLoanPercent(res.data.maxLoanPercent ?? 50);
         setLastBroadcast(res.data.lastBroadcastMessage || "");
         setLastBroadcastAt(res.data.lastBroadcastAt || "");
       })
@@ -27,27 +80,10 @@ export default function Settings() {
         toast.error("Failed to load settings");
       })
       .finally(() => setLoadingSettings(false));
+
+    loadCycle();
   }, []);
 
-  // ── Save repay days ────────────────────────────────────────
-  const handleSaveRepayDays = async () => {
-    if (repayDays < 1 || repayDays > 365) {
-      toast.error("Repay days must be between 1 and 365");
-      return;
-    }
-    setSavingRepay(true);
-    try {
-      const res = await axios.patch("/dashboard/settings", { repayDays });
-      setSavedRepayDays(res.data.repayDays);
-      toast.success(`Repayment period updated to ${res.data.repayDays} days`);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || "Failed to update settings");
-    } finally {
-      setSavingRepay(false);
-    }
-  };
-
-  // ── Broadcast message ──────────────────────────────────────
   const handleBroadcast = async () => {
     if (!broadcastMessage.trim()) {
       toast.error("Please enter a message");
@@ -83,48 +119,115 @@ export default function Settings() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">Group Settings</h1>
 
-      {/* ── Loan Repayment Period ───────────────────────────── */}
+      <SettingsTable
+        repayDays={repayDays}
+        interestRate={interestRate}
+        minSaveAmount={minSaveAmount}
+        maxLoanPercent={maxLoanPercent}
+        onEdit={() => setEditOpen(true)}
+      />
+
+      <EditSettingsModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        current={{ repayDays, interestRate, minSaveAmount, maxLoanPercent }}
+        onSaved={(updated) => {
+          setRepayDays(updated.repayDays);
+          setInterestRate(updated.interestRate);
+          setMinSaveAmount(updated.minSaveAmount);
+          setMaxLoanPercent(updated.maxLoanPercent);
+        }}
+      />
+
+      {/* ── Savings Cycle ────────────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow p-6">
         <div className="flex items-center gap-3 mb-1">
-          <span className="text-2xl">📅</span>
-          <h2 className="text-lg font-semibold text-gray-800">
-            Loan Repayment Period
-          </h2>
-        </div>
-        <p className="text-sm text-gray-500 mb-4 ml-9">
-          Set how many days members have to repay a loan. This is decided by the
-          group at their meeting. Currently:{" "}
-          <strong>{savedRepayDays} days</strong>
-        </p>
-
-        <div className="flex items-center gap-3 ml-9">
-          <input
-            type="number"
-            min={1}
-            max={365}
-            value={repayDays}
-            onChange={(e) => setRepayDays(Number(e.target.value))}
-            className="w-28 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <span className="text-sm text-gray-500">days</span>
-          <button
-            onClick={handleSaveRepayDays}
-            disabled={savingRepay || repayDays === savedRepayDays}
-            className="px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {savingRepay ? "Saving..." : "Save"}
-          </button>
+          <span className="text-2xl">🔄</span>
+          <h2 className="text-lg font-semibold text-gray-800">Savings Cycle</h2>
         </div>
 
-        {repayDays !== savedRepayDays && (
-          <p className="text-xs text-amber-500 mt-2 ml-9">
-            ⚠️ You have unsaved changes
-          </p>
+        {cycle?.cycleActive ? (
+          <div className="ml-9">
+            <p className="text-sm text-gray-500 mb-1">
+              Cycle started{" "}
+              {cycle.cycleStartDate &&
+                new Date(cycle.cycleStartDate).toLocaleDateString()}
+            </p>
+            <p className="text-sm text-gray-700">
+              Ends{" "}
+              <strong>
+                {cycle.cycleEndDate &&
+                  new Date(cycle.cycleEndDate).toLocaleDateString()}
+              </strong>
+              {cycle.daysRemaining !== null && (
+                <span className="text-gray-500">
+                  {" "}
+                  ({cycle.daysRemaining} day
+                  {cycle.daysRemaining === 1 ? "" : "s"} remaining)
+                </span>
+              )}
+            </p>
+            <button
+              onClick={() => setShareoutOpen(true)}
+              className="mt-3 px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 transition"
+            >
+              Review Share-Out
+            </button>
+          </div>
+        ) : (
+          <div className="ml-9">
+            <p className="text-sm text-gray-500 mb-4">
+              No active cycle. Start one once the group has agreed when this
+              savings round will end.
+            </p>
+            <div className="flex items-end gap-3">
+              <div className="w-40">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Start date
+                </label>
+                <DatePicker
+                  selected={newCycleStartDate}
+                  onChange={setNewCycleStartDate}
+                  placeholder="Select start date"
+                />
+              </div>
+              <div className="w-40">
+                <label className="block text-xs text-gray-500 mb-1">
+                  End date
+                </label>
+                <DatePicker
+                  selected={newCycleEndDate}
+                  onChange={setNewCycleEndDate}
+                  minDate={
+                    newCycleStartDate
+                      ? new Date(
+                          newCycleStartDate.getTime() + 24 * 60 * 60 * 1000,
+                        )
+                      : new Date(Date.now() + 24 * 60 * 60 * 1000)
+                  }
+                  placeholder="Select end date"
+                />
+              </div>
+              <button
+                onClick={handleStartCycle}
+                disabled={startingCycle}
+                className="px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {startingCycle ? "Starting..." : "Start Cycle"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
+
+      <ShareoutModal
+        open={shareoutOpen}
+        onClose={() => setShareoutOpen(false)}
+        onClosed={loadCycle}
+      />
 
       {/* ── Broadcast Message ───────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow p-6">
@@ -159,37 +262,11 @@ export default function Settings() {
               disabled={broadcasting || !broadcastMessage.trim()}
               className="px-6 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {broadcasting ? (
-                <>
-                  <svg
-                    className="animate-spin h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8z"
-                    />
-                  </svg>
-                  Sending...
-                </>
-              ) : (
-                <>📤 Broadcast</>
-              )}
+              {broadcasting ? "Sending..." : "📤 Broadcast"}
             </button>
           </div>
         </div>
 
-        {/* Last broadcast info */}
         {lastBroadcast && (
           <div className="ml-9 mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
             <p className="text-xs text-gray-500 mb-1">
@@ -210,9 +287,8 @@ export default function Settings() {
         </p>
         <p className="text-sm text-blue-600">
           Financial records — savings, loans, and repayments — cannot be edited
-          here. All transactions are secured with cryptographic signatures and
-          multi-party verification. Records can only be changed through the USSD
-          system by members directly.
+          here. All transactions are secured and multi-party verified. Records
+          can only be changed through the USSD system by members directly.
         </p>
       </div>
     </div>

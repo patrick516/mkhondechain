@@ -1,0 +1,48 @@
+// Group leaders and system administrators.
+// Password hashed with bcrypt (native) — handled in application
+// code (authController / createAdmin script), same as before.
+// ─────────────────────────────────────────────────────────────
+
+enum AdminRole {
+  admin
+  superadmin
+}
+
+enum AdminStatus {
+  active
+  suspended
+  inactive
+}
+
+model Admin {
+  id           String    @id @default(cuid())
+  username     String    @unique @db.VarChar(30)
+  passwordHash String
+  fullName     String    @db.VarChar(100)
+  phone        String?
+  role         AdminRole @default(admin)
+
+  // Nullable — superadmin may not belong to a specific group
+  groupId String?
+  group   Group?  @relation("GroupAdmins", fields: [groupId], references: [id])
+
+  // The Group this admin is the designated leader of (one-to-one, from the Group side)
+  leadsGroup Group? @relation("GroupLeader")
+
+  // Transactions this admin has approved (e.g. loan disbursements)
+  approvals        Transaction[]
+  auditLogs        Audit[]
+  disputesLogged   Dispute[]     @relation("DisputeLoggedBy")
+  disputesResolved Dispute[]     @relation("DisputeResolvedBy")
+
+  lastLogin     DateTime?
+  loginAttempts Int         @default(0)
+  lockUntil     DateTime?
+  status        AdminStatus @default(active)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([username])
+  @@map("admins")
+}

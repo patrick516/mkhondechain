@@ -1,5 +1,9 @@
 import axios from "./axios";
-import type { ActivityItem, LoanRequestItem } from "@/types/dashboard";
+import type {
+  ActivityItem,
+  LoanRequestItem,
+  PlatformFeesSummary,
+} from "@/types/dashboard";
 
 // GET /api/dashboard/summary — unified stats endpoint
 export const fetchDashboardStats = async () => {
@@ -11,6 +15,7 @@ export const fetchDashboardStats = async () => {
     totalOwing: res.data.totalOwing || 0,
     totalRepaid: res.data.totalRepaid || 0,
     pendingLoans: res.data.pendingLoans || 0,
+    overdueLoans: res.data.overdueLoans || 0,
     activeGroups: res.data.activeGroups || 0,
   };
 };
@@ -90,4 +95,13 @@ export const updateSettings = async (settings: {
 export const sendBroadcast = async (message: string, groupId?: string) => {
   const res = await axios.post("/dashboard/broadcast", { message, groupId });
   return res.data;
+};
+
+// GET /api/transactions/platform-fees — superadmin only
+export const fetchPlatformFees = async (): Promise<PlatformFeesSummary> => {
+  const res = await axios.get("/transactions/platform-fees");
+  return {
+    totalPlatformFeesCollected: res.data.totalPlatformFeesCollected || 0,
+    byGroup: res.data.byGroup || [],
+  };
 };

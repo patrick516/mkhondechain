@@ -1,4 +1,3 @@
-// ─────────────────────────────────────────────────────────────
 // Audit Routes
 // Security log access — restricted to superadmins.
 // Regular admins can only see their group's audits.
@@ -6,7 +5,7 @@
 
 const express = require("express");
 const router = express.Router();
-const Audit = require("../models/auditModel");
+const prisma = require("../utils/prismaClient");
 const logger = require("../utils/logger");
 
 // GET /audit — list audit logs with filtering
@@ -16,53 +15,59 @@ router.get("/", async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100); // Max 100 per page
     const skip = (page - 1) * limit;
 
-    // Build query
-    const query = {};
+    // Build where clause
+    const where = {};
 
     // Group scoping
     if (req.admin.role !== "superadmin" && req.admin.groupId) {
-      query.groupId = req.admin.groupId;
+      where.groupId = req.admin.groupId;
     } else if (req.query.groupId) {
-      query.groupId = req.query.groupId;
+      where.groupId = req.query.groupId;
     }
 
     // Filter by action
     if (req.query.action) {
-      query.action = req.query.action;
+      where.action = req.query.action;
     }
 
     // Filter by severity
     if (req.query.severity) {
-      query.severity = req.query.severity;
+      where.severity = req.query.severity;
     }
 
     // Filter by date range
     if (req.query.fromDate || req.query.toDate) {
-      query.createdAt = {};
+      where.createdAt = {};
       if (req.query.fromDate)
-        query.createdAt.$gte = new Date(req.query.fromDate);
-      if (req.query.toDate) query.createdAt.$lte = new Date(req.query.toDate);
+        where.createdAt.gte = new Date(req.query.fromDate);
+      if (req.query.toDate) where.createdAt.lte = new Date(req.query.toDate);
     }
 
     // Filter by admin
     if (req.query.adminId) {
-      query.performedBy = req.query.adminId;
+      where.performedById = req.query.adminId;
     }
 
     const [logs, total] = await Promise.all([
-      Audit.find(query)
-        .populate("performedBy", "username fullName")
-        .populate("targetMember", "firstName surname phone")
-        .populate("groupId", "name")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Audit.countDocuments(query),
+      prisma.audit.findMany({
+        where,
+        include: {
+          performedBy: { select: { username: true, fullName: true } },
+          targetMember: {
+            select: { firstName: true, surname: true, phone: true },
+          },
+          group: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.audit.count({ where }),
     ]);
 
     res.status(200).json({
       logs: logs.map((log) => ({
-        id: log._id,
+        id: log.id,
         action: log.action,
         severity: log.severity,
         performedBy: log.performedBy
@@ -71,8 +76,8 @@ router.get("/", async (req, res) => {
         targetMember: log.targetMember
           ? `${log.targetMember.firstName} ${log.targetMember.surname}`
           : log.targetMemberPhone,
-        group: log.groupId?.name,
-        details: Object.fromEntries(log.details),
+        group: log.group?.name,
+        details: log.details || {},
         ipAddress: log.ipAddress,
         status: log.status,
         errorMessage: log.errorMessage,
@@ -94,36 +99,35 @@ router.get("/", async (req, res) => {
 // GET /audit/stats — summary statistics
 router.get("/stats", async (req, res) => {
   try {
-    const query = {};
+    const where = {};
     if (req.admin.role !== "superadmin" && req.admin.groupId) {
-      query.groupId = req.admin.groupId;
+      where.groupId = req.admin.groupId;
     }
 
-    const stats = await Audit.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: "$action",
-          count: { $sum: 1 },
-          lastOccurrence: { $max: "$createdAt" },
-        },
-      },
-      { $sort: { count: -1 } },
-    ]);
+    const actionGroups = await prisma.audit.groupBy({
+      by: ["action"],
+      where,
+      _count: { action: true },
+      _max: { createdAt: true },
+      orderBy: { _count: { action: "desc" } },
+    });
 
-    const severityStats = await Audit.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: "$severity",
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    const severityGroups = await prisma.audit.groupBy({
+      by: ["severity"],
+      where,
+      _count: { severity: true },
+    });
 
     res.status(200).json({
-      actionBreakdown: stats,
-      severityBreakdown: severityStats,
+      actionBreakdown: actionGroups.map((g) => ({
+        _id: g.action,
+        count: g._count.action,
+        lastOccurrence: g._max.createdAt,
+      })),
+      severityBreakdown: severityGroups.map((g) => ({
+        _id: g.severity,
+        count: g._count.severity,
+      })),
     });
   } catch (err) {
     logger.error("AUDIT_STATS_ERROR", { error: err.message });

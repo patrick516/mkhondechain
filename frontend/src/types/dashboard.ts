@@ -31,7 +31,6 @@ export interface MemberPayload {
   phone: string;
   gender: string;
   pin: string;
-  groupId: string;
 }
 
 export interface AuditLogItem {
@@ -44,4 +43,16 @@ export interface AuditLogItem {
   details: Record<string, string>;
   status: "success" | "failed";
   date: string;
+}
+
+export interface PlatformFeeGroupBreakdown {
+  groupId: string;
+  groupName: string;
+  totalFees: number;
+  feeTransactionCount: number;
+}
+
+export interface PlatformFeesSummary {
+  totalPlatformFeesCollected: number;
+  byGroup: PlatformFeeGroupBreakdown[];
 }

@@ -1,0 +1,92 @@
+// ─────────────────────────────────────────────────────────────
+// File: backend/prisma/models/transaction.prisma
+// ─────────────────────────────────────────────────────────────
+// Transaction Model
+// Immutable financial record — append-only.
+// Every transaction has a unique reference for idempotency.
+// ─────────────────────────────────────────────────────────────
+
+enum TransactionType {
+  save
+  borrow
+  repay
+  interest
+  fee
+  reversal
+}
+
+enum TransactionStatus {
+  pending
+  success
+  failed
+  reversed
+}
+
+enum TransactionMethod {
+  USSD
+  Admin
+  MobileMoney
+  System
+}
+
+model Transaction {
+  id        String @id @default(cuid())
+  reference String @unique
+
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id])
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  type              TransactionType
+  amount            Float
+  beforeBalance     Float
+  afterBalance      Float
+  beforeLoanBalance Float             @default(0)
+  afterLoanBalance  Float             @default(0)
+  status            TransactionStatus @default(pending)
+  method            TransactionMethod
+
+  approvedById String?
+  approvedBy   Admin?  @relation(fields: [approvedById], references: [id])
+
+  mobileMoneyRef String?
+  note           String  @default("") @db.VarChar(500)
+  reversed       Boolean @default(false)
+
+  reversalOfId String?      @unique
+  reversalOf   Transaction? @relation("TransactionReversal", fields: [reversalOfId], references: [id])
+  reversedBy   Transaction? @relation("TransactionReversal")
+
+  ipAddress String?
+  userAgent String?
+
+  // Set on borrow-type transactions at disbursement time.
+  disbursedAt DateTime?
+
+  // (disbursedAt + group.maxRepayDays). Used to determine
+  // whether a loan is overdue.
+  dueDate DateTime?
+
+  // True once interest has been calculated and charged for this
+  // loan (happens at the member's first repayment attempt, based
+  // on days actually held — see loanInterest.js). Prevents
+  // double-charging interest on later partial repayments.
+  interestApplied     Boolean @default(false)
+  // Set once an overdue reminder SMS has been sent for this loan,
+  // so the nightly job never reminds the same loan twice.
+  overdueReminderSent Boolean @default(false)
+
+  disputesAgainst   Dispute[] @relation("DisputedTransaction")
+  disputeResolution Dispute?  @relation("DisputeResolutionTransaction")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([memberId, createdAt])
+  @@index([groupId, createdAt])
+  @@index([status, createdAt])
+  @@index([mobileMoneyRef])
+  @@map("transactions")
+}

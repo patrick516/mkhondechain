@@ -1,0 +1,53 @@
+// Represents a village savings group (chilimba / Banki Mkhonde).
+
+enum GroupStatus {
+  active
+  inactive
+  suspended
+}
+
+model Group {
+  id       String @id @default(cuid())
+  name     String @unique @db.VarChar(100)
+  location String
+
+  // One-to-one: the single Admin who leads this group.
+  // Matches "GroupLeader" relation declared on the Admin side.
+  leaderId String @unique
+  leader   Admin  @relation("GroupLeader", fields: [leaderId], references: [id])
+
+  // Other Admins scoped to this group (via Admin.groupId).
+  // Matches "GroupAdmins" relation declared on the Admin side.
+  admins   Admin[]        @relation("GroupAdmins")
+  members  Member[]
+  // This group's settings record (via SystemSetting.groupId).
+  settings SystemSetting?
+
+  transactions Transaction[]
+  auditLogs    Audit[]
+  disputes     Dispute[]
+
+  fundBalance        Float       @default(0)
+  maxLoanPercent     Float       @default(50)
+  interestRate       Float       @default(10)
+  maxRepayDays       Int         @default(30)
+  minSaveAmount      Float       @default(100)
+  platformFeePercent Float       @default(2)
+  status             GroupStatus @default(active)
+
+  // Savings cycle — chair-initiated, not auto-restarting.
+  // cycleActive false = no cycle currently running (between cycles,
+  // e.g. right after a share-out, before the chair starts the next one).
+  cycleActive    Boolean   @default(false)
+  cycleStartDate DateTime?
+  cycleEndDate   DateTime?
+
+  payouts Payout[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([status])
+  @@map("groups")
+}

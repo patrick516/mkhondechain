@@ -1,3 +1,35 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* react-datepicker theming to match app primary color */
+.react-datepicker {
+  font-family: inherit;
+  border-color: #e5e7eb;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+.react-datepicker__header {
+  background-color: #1e3a8a; /* matches your bg-primary */
+  border-bottom: none;
+}
+.react-datepicker__current-month,
+.react-datepicker__day-name {
+  color: white;
+}
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background-color: #1e3a8a;
+  border-radius: 0.5rem;
+}
+.react-datepicker__day--selected:hover,
+.react-datepicker__day--keyboard-selected:hover {
+  background-color: #1e40af;
+}
+.react-datepicker__day:hover {
+  background-color: #dbeafe;
+  border-radius: 0.5rem;
+}
+.react-datepicker__navigation-icon::before {
+  border-color: white;
+}

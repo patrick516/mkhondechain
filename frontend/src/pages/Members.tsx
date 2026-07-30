@@ -18,11 +18,13 @@ export default function Members() {
   const [showModal, setShowModal] = useState(false);
 
   // Form states
+
+  // Form states
+  const DEFAULT_PIN = "1234";
   const [firstName, setFirstName] = useState("");
   const [surname, setSurname] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
-  const [ethAddress, setEthAddress] = useState("");
 
   const fetchMembers = async () => {
     try {
@@ -63,30 +65,25 @@ export default function Members() {
     try {
       const formattedPhone = formatPhoneNumber(phone);
 
-      // Use MemberPayload type here
-      const payload: MemberPayload & { ethAddress?: string } = {
+      const payload: MemberPayload = {
         firstName,
         surname,
         phone: formattedPhone,
         gender,
+        pin: DEFAULT_PIN,
       };
-
-      if (ethAddress.trim() !== "") {
-        payload.ethAddress = ethAddress.trim();
-      }
-
-      console.log("Sending member data:", payload);
 
       const res = await axios.post("/members", payload);
       console.log("Members from API:", res.data);
 
-      toast.success("Member added successfully!");
+      toast.success(
+        `Member added! Tell them their starting PIN is ${DEFAULT_PIN} — they'll be asked to change it the first time they dial in.`,
+      );
       setShowModal(false);
       setFirstName("");
       setSurname("");
       setPhone("");
       setGender("");
-      setEthAddress("");
       fetchMembers();
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -131,7 +128,7 @@ export default function Members() {
                   <th key={header.id} className="px-4 py-2 text-left">
                     {flexRender(
                       header.column.columnDef.header,
-                      header.getContext()
+                      header.getContext(),
                     )}
                   </th>
                 ))}
@@ -211,12 +208,17 @@ export default function Members() {
                 placeholder="Phone Number"
                 required
               />
-              <input
-                className="w-full p-2 border rounded"
-                value={ethAddress}
-                onChange={(e) => setEthAddress(e.target.value)}
-                placeholder="Wallet Address (optional)"
-              />
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Starting PIN (member changes this on first USSD login)
+                </label>
+                <input
+                  className="w-full p-2 border rounded bg-gray-50 text-gray-500"
+                  value={DEFAULT_PIN}
+                  readOnly
+                  disabled
+                />
+              </div>
               <div className="flex items-center justify-between">
                 <button
                   className="px-4 py-2 text-white rounded bg-primary"

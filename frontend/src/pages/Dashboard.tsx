@@ -25,8 +25,8 @@ export default function Dashboard() {
     { label: "Total Borrowed", value: "MK 0" },
     { label: "Active Members", value: "0 Members", bg: "bg-overlay" },
     { label: "Outstanding Loans", value: "MK 0", bg: "bg-red-600" },
+    { label: "Overdue Loans", value: "0", bg: "bg-yellow-600" },
   ]);
-
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loanRequests, setLoanRequests] = useState<LoanRequestItem[]>([]);
 
@@ -62,6 +62,11 @@ export default function Dashboard() {
             label: "Outstanding Loans",
             value: `MK ${summary.totalOwing.toLocaleString()}`,
             bg: "bg-red-600",
+          },
+          {
+            label: "Overdue Loans",
+            value: `${summary.overdueLoans}`,
+            bg: summary.overdueLoans > 0 ? "bg-yellow-600" : "bg-overlay",
           },
         ]);
       } catch (err: any) {
@@ -157,6 +162,11 @@ export default function Dashboard() {
             label: "Outstanding Loans",
             value: `MK ${summary.totalOwing.toLocaleString()}`,
             bg: "bg-red-600",
+          },
+          {
+            label: "Overdue Loans",
+            value: `${summary.overdueLoans}`,
+            bg: summary.overdueLoans > 0 ? "bg-yellow-600" : "bg-overlay",
           },
         ]);
       });

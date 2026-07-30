@@ -1,0 +1,47 @@
+// Payout Model
+// Permanent record of what each member received (or still owes)
+// when a savings cycle closes ("share-out"). One row per member,
+// per cycle close. Never modified after creation — if a mistake
+// is found, it's corrected with a new adjustment record, not by
+// editing history.
+// ─────────────────────────────────────────────────────────────
+
+model Payout {
+  id String @id @default(cuid())
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id])
+
+  // Which cycle this payout closes out
+  cycleStartDate DateTime
+  cycleEndDate   DateTime
+
+  // What this member was entitled to, based on their savings
+  // proportion of the group's total fund at close time
+  entitledShare Float
+
+  // How much of that share was used to clear an outstanding loan
+  // (principal + interest), rather than paid out as cash
+  loanOffset Float @default(0)
+
+  // Actual cash paid out to the member (entitledShare - loanOffset,
+  // floored at 0 — never negative)
+  cashPayout Float
+
+  // If loanOffset couldn't fully cover what they owed, the
+  // remainder that carries forward into the next cycle
+  remainingLoanBalance Float @default(0)
+
+  // Free-text note — e.g. "extension granted, 14 days" if the
+  // chair gave this member extra time before finalizing
+  note String? @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+
+  @@index([groupId, cycleEndDate])
+  @@index([memberId])
+  @@map("payouts")
+}

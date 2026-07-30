@@ -1,0 +1,39 @@
+// System Setting Model
+// Per-group configuration settings.
+// Each group has exactly one settings record.
+//
+// Note: Mongoose's nested `savingWindow` object has been
+// flattened into savingWindowEnabled / savingWindowOpenTime /
+// savingWindowCloseTime, since Postgres has no embedded-document
+// equivalent. The API layer will re-nest this back into
+// `savingWindow: { enabled, openTime, closeTime }` when we
+// rewrite dashboardController.js, so the frontend contract can
+// stay the same if we choose to.
+// ─────────────────────────────────────────────────────────────
+
+model SystemSetting {
+  id String @id @default(cuid())
+
+  // One settings record per group
+  groupId String @unique
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  repayDays      Int   @default(30)
+  interestRate   Float @default(10)
+  minSaveAmount  Float @default(100)
+  maxLoanPercent Float @default(50)
+
+  savingWindowEnabled   Boolean @default(false)
+  savingWindowOpenTime  String  @default("08:00")
+  savingWindowCloseTime String  @default("17:00")
+
+  lastBroadcastMessage String    @default("")
+  lastBroadcastAt      DateTime?
+
+  maintenanceMode Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

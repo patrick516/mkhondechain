@@ -1,0 +1,64 @@
+// ─────────────────────────────────────────────────────────────
+// File: backend/prisma/models/dispute.prisma
+// ─────────────────────────────────────────────────────────────
+// Dispute Model
+// Member-raised queries/complaints about a transaction not
+// matching reality (e.g. "loan said success, money never came").
+// Can be raised via USSD by the member themselves, or logged
+// manually by the group leader after a verbal/phone complaint.
+// ─────────────────────────────────────────────────────────────
+
+enum DisputeSource {
+  USSD
+  Admin
+}
+
+enum DisputeStatus {
+  open
+  investigating
+  resolved
+  rejected
+}
+
+model Dispute {
+  id String @id @default(cuid())
+
+  // The member who the dispute is about/from
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id])
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  // The specific transaction being disputed (optional — a member
+  // could in future raise a general query not tied to one record)
+  transactionId String?
+  transaction   Transaction? @relation("DisputedTransaction", fields: [transactionId], references: [id])
+
+  source      DisputeSource
+  description String        @db.VarChar(500)
+  status      DisputeStatus @default(open)
+
+  // Set only if an admin manually logged this on the member's behalf
+  loggedById String?
+  loggedBy   Admin?  @relation("DisputeLoggedBy", fields: [loggedById], references: [id])
+
+  // Set when moved to resolved/rejected
+  resolvedById   String?
+  resolvedBy     Admin?    @relation("DisputeResolvedBy", fields: [resolvedById], references: [id])
+  resolutionNote String?   @db.VarChar(500)
+  resolvedAt     DateTime?
+
+  // If resolving required an actual money correction (e.g. a
+  // reversal or adjustment transaction), link to that record here
+  resolutionTransactionId String?      @unique
+  resolutionTransaction   Transaction? @relation("DisputeResolutionTransaction", fields: [resolutionTransactionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId, createdAt])
+  @@index([memberId, createdAt])
+  @@index([status, createdAt])
+  @@map("disputes")
+}

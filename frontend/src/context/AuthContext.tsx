@@ -1,12 +1,12 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
-
 interface AdminInfo {
   username: string;
+  fullName: string;
   role: string;
+  groupId: string | null;
   lastLogin: string | null;
 }
-
 interface AuthContextType {
   token: string | null;
   admin: AdminInfo | null;

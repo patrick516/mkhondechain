@@ -1,19 +1,19 @@
-// ─────────────────────────────────────────────────────────────
-// USSD Routes — MkhondeChain (Secure, Non-Blockchain)
+// USSD Routes — MkhondeChain (Secure)
 // Bilingual: English + Chichewa
 // Every transaction requires PIN verification.
 // ─────────────────────────────────────────────────────────────
 
 const express = require("express");
 const router = express.Router();
+const bcrypt = require("bcrypt");
 const savings = require("../controllers/savingsController");
-const Member = require("../models/memberModel");
-const SystemSetting = require("../models/systemSettingModel");
+const disputes = require("../controllers/disputeController");
+const prisma = require("../utils/prismaClient");
+const { comparePin } = require("../utils/memberAuth");
+const getSettingsForGroup = require("../utils/getSettingsForGroup");
 const logger = require("../utils/logger");
 
-// ─────────────────────────────────────────────────────────────
 // HELPERS
-// ─────────────────────────────────────────────────────────────
 
 const formatDueDate = (loanDueDate) => {
   if (!loanDueDate || loanDueDate === 0) return "N/A";
@@ -22,8 +22,74 @@ const formatDueDate = (loanDueDate) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// MAIN USSD HANDLER
+// FORCED PIN CHANGE FLOW
+// Runs instead of the main menu whenever member.mustChangePin is
+// true. Steps: enter current PIN → enter new 4-digit PIN → confirm.
 // ─────────────────────────────────────────────────────────────
+
+async function handleForcedPinChange(member, input, level) {
+  if (level === 1) {
+    return (
+      `CON Kusintha PIN kofunika. / PIN change required.\n` +
+      `Lowetsani PIN yanu yakale:\n` +
+      `Enter your CURRENT PIN:`
+    );
+  }
+
+  if (level === 2) {
+    const currentPin = input[1];
+    const validPin = await comparePin(currentPin, member.pinHash);
+    if (!validPin) {
+      return `END PIN yolakwika. / Invalid PIN. Try again.`;
+    }
+    return (
+      `CON Lowetsani PIN yatsopano (manambala 4):\n` +
+      `Enter your NEW 4-digit PIN:`
+    );
+  }
+
+  if (level === 3) {
+    const currentPin = input[1];
+    const validPin = await comparePin(currentPin, member.pinHash);
+    if (!validPin) {
+      return `END PIN yolakwika. / Invalid PIN. Try again.`;
+    }
+
+    const newPin = input[2];
+    if (!/^\d{4}$/.test(newPin)) {
+      return `END PIN iyenera kukhala manambala 4. / PIN must be exactly 4 digits.`;
+    }
+
+    return `CON Tsimikizani PIN yatsopano:\n` + `Confirm your NEW PIN:`;
+  }
+
+  if (level === 4) {
+    const newPin = input[2];
+    const confirmPin = input[3];
+
+    if (newPin !== confirmPin) {
+      return `END PIN sizigwirizana. / PINs do not match. Dial again to retry.`;
+    }
+
+    const newPinHash = await bcrypt.hash(newPin, 12);
+    await prisma.member.update({
+      where: { id: member.id },
+      data: { pinHash: newPinHash, mustChangePin: false },
+    });
+
+    logger.info("MEMBER_PIN_SELF_CHANGED", { memberId: member.id });
+
+    return (
+      `END Zachita bwino! / Success!\n` +
+      `PIN yanu yasinthidwa. Dial *XXX# kuti muyambe.\n` +
+      `Your PIN has been changed. Dial again to use your account.`
+    );
+  }
+
+  return `END Palibe. Yesaninso. / Something went wrong. Try again.`;
+}
+
+// MAIN USSD HANDLER
 
 router.post("/", async (req, res) => {
   const { phoneNumber, text, sessionId } = req.body;
@@ -37,9 +103,8 @@ router.post("/", async (req, res) => {
 
   try {
     // ── Check registration ─────────────────────────────────
-    const member = await Member.findOne({
-      phone: phoneNumber,
-      status: "active",
+    const member = await prisma.member.findFirst({
+      where: { phone: phoneNumber, status: "active" },
     });
 
     if (!member) {
@@ -51,13 +116,19 @@ router.post("/", async (req, res) => {
       return res.send(response);
     }
 
-    // ── PIN Verification (required for all transactions) ────
-    // PIN is collected as first input after menu selection
-    // Session state would ideally be stored in Redis; for now, we use text pattern
-    // Format: menu*pin*amount*confirm
+    // ── Forced PIN change (first login, or after a leader reset) ──
+    // Intercepts the ENTIRE session — no menu access until the
+    // member sets their own new PIN. This never sends a PIN over
+    // SMS; the leader gives the member their initial PIN directly.
+    if (member.mustChangePin) {
+      response = await handleForcedPinChange(member, input, level);
+      res.set("Content-Type", "text/plain");
+      return res.send(response);
+    }
 
-    const setting = await SystemSetting.findOne();
-    const repayDays = setting?.repayDays || 30;
+    // ── Group settings (repay days etc.) ────────────────────
+    const settings = await getSettingsForGroup(prisma, member.groupId);
+    const repayDays = settings?.repayDays || 30;
 
     // ── MAIN MENU ──────────────────────────────────────────
     if (text === "") {
@@ -68,17 +139,16 @@ router.post("/", async (req, res) => {
         `1. Sungani Ndalama / Save\n` +
         `2. Tengani Ngongole / Borrow\n` +
         `3. Bwezerani Ngongole / Repay\n` +
-        `4. Onani Ndalama / Balance`;
+        `4. Onani Ndalama / Balance\n` +
+        `5. Nenani Vuto / Report a Problem`;
 
-      // ────────────────────────────────────────────────────────
       // 1. SAVE MONEY
-      // ────────────────────────────────────────────────────────
     } else if (input[0] === "1") {
       if (level === 1) {
         response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
       } else if (level === 2) {
         const pin = input[1];
-        const validPin = await member.comparePin(pin);
+        const validPin = await comparePin(pin, member.pinHash);
         if (!validPin) {
           response = `END PIN yolakwika. / Invalid PIN.`;
         } else {
@@ -107,7 +177,6 @@ router.post("/", async (req, res) => {
             `2. Ayi, bwerani / No`;
         }
       } else if (level === 4) {
-        const pin = input[1];
         const amount = parseInt(input[2]);
         const confirm = input[3];
 
@@ -139,15 +208,13 @@ router.post("/", async (req, res) => {
         }
       }
 
-      // ────────────────────────────────────────────────────────
       // 2. BORROW MONEY
-      // ────────────────────────────────────────────────────────
     } else if (input[0] === "2") {
       if (level === 1) {
         response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
       } else if (level === 2) {
         const pin = input[1];
-        const validPin = await member.comparePin(pin);
+        const validPin = await comparePin(pin, member.pinHash);
         if (!validPin) {
           response = `END PIN yolakwika. / Invalid PIN.`;
         } else {
@@ -306,23 +373,20 @@ router.post("/", async (req, res) => {
         }
       }
 
-      // ────────────────────────────────────────────────────────
       // 3. REPAY LOAN
-      // ────────────────────────────────────────────────────────
     } else if (input[0] === "3") {
       if (level === 1) {
         response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
       } else if (level === 2) {
         const pin = input[1];
-        const validPin = await member.comparePin(pin);
+        const validPin = await comparePin(pin, member.pinHash);
         if (!validPin) {
           response = `END PIN yolakwika. / Invalid PIN.`;
         } else {
           try {
             const bal = await savings.getBalanceForUSSD(phoneNumber);
-            const loanMK = bal.loanAmount;
 
-            if (loanMK === 0) {
+            if (bal.loanAmount === 0) {
               response =
                 `END Mulibe ngongole.\n` +
                 `You have no active loan.\n` +
@@ -330,8 +394,8 @@ router.post("/", async (req, res) => {
             } else {
               const dueDate = formatDueDate(bal.loanDueDate);
               response =
-                `CON Ngongole yanu:\n` +
-                `Your loan: MK${loanMK.toLocaleString()}\n` +
+                `CON Ngongole yanu (ndi chiwongola dzanja):\n` +
+                `Total owed (with interest): MK${bal.owedIfPaidToday.toLocaleString()}\n` +
                 `Due date: ${dueDate}\n` +
                 `─────────────────\n` +
                 `Lowetsani ndalama yobweza:\n` +
@@ -395,7 +459,7 @@ router.post("/", async (req, res) => {
         response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
       } else if (level === 2) {
         const pin = input[1];
-        const validPin = await member.comparePin(pin);
+        const validPin = await comparePin(pin, member.pinHash);
         if (!validPin) {
           response = `END PIN yolakwika. / Invalid PIN.`;
         } else {
@@ -411,7 +475,9 @@ router.post("/", async (req, res) => {
               `Ngongole / Loan:\n` +
               `MK${bal.loanAmount.toLocaleString()}\n` +
               (bal.loanAmount > 0
-                ? `Kubweza: ${formatDueDate(bal.loanDueDate)}\n`
+                ? `Ngati mubweza lero: MK${bal.owedIfPaidToday.toLocaleString()}\n` +
+                  `If paid today: MK${bal.owedIfPaidToday.toLocaleString()}\n` +
+                  `Kubweza: ${formatDueDate(bal.loanDueDate)}\n`
                 : ``) +
               `─────────────────\n` +
               `Mutha kutenga / Can borrow:\n` +
@@ -423,9 +489,49 @@ router.post("/", async (req, res) => {
           }
         }
       }
+      // 5. REPORT A PROBLEM (DISPUTE)
+    } else if (input[0] === "5") {
+      if (level === 1) {
+        response = `CON Lowetsani PIN yanu:\n` + `Enter your PIN:`;
+      } else if (level === 2) {
+        const pin = input[1];
+        const validPin = await comparePin(pin, member.pinHash);
+        if (!validPin) {
+          response = `END PIN yolakwika. / Invalid PIN.`;
+        } else {
+          response =
+            `CON Fotokozani vuto lanu mwachidule:\n` +
+            `Briefly describe your problem:`;
+        }
+      } else if (level === 3) {
+        const description = input[2];
+        if (!description || description.trim().length === 0) {
+          response =
+            `END Palibe zolembedwa. Yesaninso.\n` +
+            `Nothing entered. Try again.`;
+        } else {
+          try {
+            await disputes.raiseDisputeViaUSSD(
+              phoneNumber,
+              description.trim(),
+              null,
+            );
+            response =
+              `END Vuto lanu latumizidwa. / Your report was submitted.\n` +
+              `Mtsogoleri wa gulu lanu adziwa. / Your group leader has been notified.\n` +
+              `Zikomo! / Thank you!`;
+          } catch (err) {
+            logger.error("USSD_DISPUTE_ERROR", {
+              phoneNumber,
+              error: err.message,
+            });
+            response = `END Palibe. ${err.message}`;
+          }
+        }
+      }
     } else {
       response =
-        `END Sankhani yolondola 1-4.\n` + `Invalid option. Choose 1 to 4.`;
+        `END Sankhani yolondola 1-5.\n` + `Invalid option. Choose 1 to 5.`;
     }
   } catch (error) {
     logger.error("USSD_FATAL_ERROR", {

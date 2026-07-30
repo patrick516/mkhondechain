@@ -1,17 +1,27 @@
 import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
-const navItems = [
+const adminNavItems = [
   { label: "Dashboard", path: "/" },
   { label: "Members", path: "/members" },
   { label: "Transactions", path: "/transactions" },
+  { label: "Disputes", path: "/disputes" },
+  { label: "Payouts", path: "/payouts" },
   { label: "Settings", path: "/settings" },
+];
+const superadminNavItems = [
+  { label: "Dashboard", path: "/" },
+  { label: "Village Banks", path: "/village-banks" },
 ];
 
 export default function Sidebar() {
   const location = useLocation();
+  const { admin } = useAuth();
+  const navItems =
+    admin?.role === "superadmin" ? superadminNavItems : adminNavItems;
 
   return (
-    <aside className="w-64 text-white shadow-lg bg-primary flex flex-col">
+    <aside className="w-64 h-full overflow-y-auto text-white shadow-lg bg-primary flex flex-col">
       {/* Logo */}
       <div className="flex flex-col items-center p-6 border-b border-blue-800">
         <img
@@ -38,7 +48,12 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-blue-800">
+      <div className="p-4 border-t border-blue-800 space-y-1">
+        {admin?.role !== "superadmin" && admin?.groupId && (
+          <p className="text-[10px] text-blue-300 text-center break-all">
+            Group ID: {admin.groupId}
+          </p>
+        )}
         <p className="text-xs text-blue-300 text-center">MkhondeChain v1.0</p>
       </div>
     </aside>

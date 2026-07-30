@@ -1,0 +1,69 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+
+
+# Group created successfully!
+#    ID:       6a61ff16a49640c9fbe9e74d
+#    Name:     TENGANI VILLAGE BANK
+#    Location: MGONA
+#    Leader:   6a17abc51674e7a3a9e024a2
+#password: Patricks123
+
+
+# Admin created successfully!
+#    Username: tenganileader
+#    Full Name: Grace Banda
+#    Role:     admin
+#    Group:    cmrywd4lg0001cp80lol7jinv
+#password: Patricks@12
+
+#./start-ngrok.sh 
+#
+
+# # App & Blockchain
+# PORT=4000
+# CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+# BLOCKCHAIN_URL=http://127.0.0.1:8545
+# PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+# # Database
+# MONGO_URI=mongodb://localhost:27017/mkhondechain
+
+# JWT_SECRET=69e84edcd4f5728ed7ca66fa926ae78ac5effef58ca3f7513887baa7455d0a65d5af42202c0e3f05d190cd7951e017c0b66f2fd271231900538512cb26c8d89c
+# FRONTEND_URL=http://localhost:5173
+
+# # Africa's Talking (SMS + USSD)
+# AT_API_KEY=atsk_55c15acdd2ed690521e2e340707529a5737cb5cfcbd004bc015621f1f9f0015408c51839
+# AT_USERNAME=sandbox
+# PRODUCT_NAME=MkhondeWallet
+
+# # Payment Gateway (Mock Airtel/Mpamba)
+# PAYMENT_PROVIDER=mock_airtel
+# PAYMENT_PROVIDER_NAME=MockAirtelGateway
+# PAYMENT_API_KEY=mock-api-key
+# PAYMENT_ENVIRONMENT=sandbox
+# NODE_ENV=development
+
+
+# # PayChangu API
+# PAYCHANGU_API_KEY=sec-live-6uAsr86trkJD5ZnIjMayfrUb7S5ppYto
+# PAYCHANGU_API_SECRET=A7ZLdsPDrTzuQbz0EHekp6UP1ITPGmZgkvJrsAVn9oYY9GRN
+# PAYCHANGU_BASE_URL=https://api.paychangu.com/mobile-money
+# PAYCHANGU_WEBHOOK_SECRET=A7ZLdsPDrTzuQbz0EHekp6UP1ITPGmZgkvJrsAVn9oYY9GRN
+
+# This was inserted by `prisma init`:
+# Environment variables declared in this file are NOT automatically loaded by Prisma.
+# Please add `import "dotenv/config";` to your `prisma.config.ts` file, or use the Prisma CLI with Bun
+# to load environment variables from .env files: https://pris.ly/prisma-config-env-vars.
+
+# Prisma supports the native connection string format for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB and CockroachDB.
+# See the documentation for all the connection string options: https://pris.ly/d/connection-strings
+
+# The following `prisma+postgres` URL is similar to the URL produced by running a local Prisma Postgres 
+# server with the `prisma dev` CLI command, when not choosing any non-default ports or settings. The API key, unlike the 
+# one found in a remote Prisma Postgres URL, does not contain any sensitive information.
+
+#DATABASE_URL="prisma+postgres://localhost:51213/?api_key=eyJkYXRhYmFzZVVybCI6InBvc3RncmVzOi8vcG9zdGdyZXM6cG9zdGdyZXNAbG9jYWxob3N0OjUxMjE0L3RlbXBsYXRlMT9zc2xtb2RlPWRpc2FibGUmY29ubmVjdGlvbl9saW1pdD0xJmNvbm5lY3RfdGltZW91dD0wJm1heF9pZGxlX2Nvbm5lY3Rpb25fbGlmZXRpbWU9MCZwb29sX3RpbWVvdXQ9MCZzaW5nbGVfdXNlX2Nvbm5lY3Rpb25zPXRydWUmc29ja2V0X3RpbWVvdXQ9MCIsIm5hbWUiOiJkZWZhdWx0Iiwic2hhZG93RGF0YWJhc2VVcmwiOiJwb3N0Z3JlczovL3Bvc3RncmVzOnBvc3RncmVzQGxvY2FsaG9zdDo1MTIxNS90ZW1wbGF0ZTE_c3NsbW9kZT1kaXNhYmxlJmNvbm5lY3Rpb25fbGltaXQ9MSZjb25uZWN0X3RpbWVvdXQ9MCZtYXhfaWRsZV9jb25uZWN0aW9uX2xpZmV0aW1lPTAmcG9vbF90aW1lb3V0PTAmc2luZ2xlX3VzZV9jb25uZWN0aW9ucz10cnVlJnNvY2tldF90aW1lb3V0PTAifQ"

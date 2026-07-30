@@ -1,0 +1,15 @@
+// Singleton system-wide configuration, not tied to any one group.
+// Currently holds only the manually-entered known balance of
+// imosys's real mobile money account, used by the nightly
+// reconciliation job until live Airtel/TNM balance queries exist.
+// ─────────────────────────────────────────────────────────────
+
+model SystemConfig {
+  id                         String   @id @default("singleton")
+  knownMobileMoneyBalance    Float    @default(0)
+  totalPlatformFeesCollected Float    @default(0)
+  updatedByUsername          String?
+  updatedAt                  DateTime @updatedAt
+
+  @@map("system_config")
+}

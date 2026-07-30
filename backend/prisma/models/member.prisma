@@ -1,0 +1,52 @@
+// Represents a savings group member.
+// PIN is hashed with bcrypt — NEVER store plaintext.
+
+enum MemberGender {
+  Male
+  Female
+  Other
+}
+
+enum MemberStatus {
+  active
+  suspended
+  left
+}
+
+model Member {
+  id        String       @id @default(cuid())
+  firstName String       @db.VarChar(50)
+  surname   String       @db.VarChar(50)
+  gender    MemberGender
+  phone     String       @unique
+  pinHash   String
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  transactions Transaction[]
+  auditLogs    Audit[]
+  disputes     Dispute[]
+  payouts      Payout[]
+
+  balance                     Float        @default(0)
+  loanBalance                 Float        @default(0)
+  totalSaved                  Float        @default(0)
+  totalBorrowed               Float        @default(0)
+  totalRepaid                 Float        @default(0)
+  savingsCount                Int          @default(0)
+  borrowCount                 Int          @default(0)
+  activeLoanInterestTotal     Float        @default(0)
+  activeLoanInterestCollected Float        @default(0)
+  status                      MemberStatus @default(active)
+  mustChangePin               Boolean      @default(true)
+  lastActivity                DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([status])
+  @@index([phone, status])
+  @@map("members")
+}

@@ -15,7 +15,9 @@ const {
   getTotalOutstanding,
   getRecentActivity,
   getPendingLoans,
+  getPlatformFeesSummary,
 } = require("../controllers/transactionController");
+const requireSuperadmin = require("../middleware/requireSuperadmin");
 
 // Member's transaction history (with pagination)
 router.get("/member/:memberId", getMemberTransactions);
@@ -36,5 +38,8 @@ router.get("/recent", getRecentActivity);
 
 // Pending loan requests (for group leader approval)
 router.get("/pending-loans", getPendingLoans);
+
+// Platform fee earnings — superadmin only
+router.get("/platform-fees", requireSuperadmin, getPlatformFeesSummary);
 
 module.exports = router;

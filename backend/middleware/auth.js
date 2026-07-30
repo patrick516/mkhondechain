@@ -1,10 +1,5 @@
-// ─────────────────────────────────────────────────────────────
-// Auth Middleware
-// Verifies JWT token on protected routes.
-// ─────────────────────────────────────────────────────────────
-
 const jwt = require("jsonwebtoken");
-const Admin = require("../models/Admin");
+const prisma = require("../utils/prismaClient");
 const logger = require("../utils/logger");
 
 module.exports = async function (req, res, next) {
@@ -24,7 +19,16 @@ module.exports = async function (req, res, next) {
     });
 
     // Verify admin still exists and is active
-    const admin = await Admin.findById(decoded.id).select("-passwordHash");
+    const admin = await prisma.admin.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        groupId: true,
+        status: true,
+      },
+    });
     if (!admin || admin.status !== "active") {
       logger.security.unauthorizedAccess(req.ip, req.path, token);
       return res.status(403).json({
@@ -33,7 +37,7 @@ module.exports = async function (req, res, next) {
     }
 
     req.admin = {
-      id: admin._id,
+      id: admin.id,
       username: admin.username,
       role: admin.role,
       groupId: admin.groupId,

@@ -1,20 +1,16 @@
-// ─────────────────────────────────────────────────────────────
 // Send Audit Day SMS
 // Notifies all active members to verify their records with group leader.
 // Can be run manually or scheduled via cron.
 // ─────────────────────────────────────────────────────────────
 
-const mongoose = require("mongoose");
 require("dotenv").config();
 
-const Member = require("../models/memberModel");
-const Group = require("../models/Group");
+const prisma = require("../utils/prismaClient");
 const sendSms = require("../utils/africasTalkingSms");
 const logger = require("../utils/logger");
 
 async function sendAuditDaySMS(groupId = null) {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
     logger.info("AUDIT_SMS_SCRIPT_STARTED", { groupId: groupId || "all" });
 
     const message =
@@ -22,20 +18,21 @@ async function sendAuditDaySMS(groupId = null) {
       `Today is Audit Transparency Day.\n` +
       `Visit your group leader to verify your savings & loan record.`;
 
-    // Build query
-    const memberQuery = { status: "active", phone: { $exists: true } };
+    // Build where clause
+    const where = { status: "active", phone: { not: null } };
 
     if (groupId) {
-      memberQuery.groupId = groupId;
-      const group = await Group.findById(groupId);
+      where.groupId = groupId;
+      const group = await prisma.group.findUnique({ where: { id: groupId } });
       if (!group) {
         throw new Error(`Group ${groupId} not found`);
       }
     }
 
-    const members = await Member.find(memberQuery).select(
-      "phone firstName groupId",
-    );
+    const members = await prisma.member.findMany({
+      where,
+      select: { phone: true, firstName: true, groupId: true },
+    });
 
     if (members.length === 0) {
       console.log("No active members found.");
@@ -79,7 +76,7 @@ async function sendAuditDaySMS(groupId = null) {
     console.error("Error:", error.message);
     process.exit(1);
   } finally {
-    await mongoose.disconnect();
+    await prisma.$disconnect();
   }
 }
 

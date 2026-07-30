@@ -1,12 +1,11 @@
 import { createColumnHelper } from "@tanstack/react-table";
 
 export interface Member {
-  _id: string;
+  id: string;
   firstName: string;
   surname: string;
   phone: string;
   gender: string;
-  ethAddress: string;
   createdAt: string;
   savingsCount: number;
   borrowCount: number;
@@ -29,10 +28,6 @@ export const memberColumns = [
   }),
   columnHelper.accessor("phone", {
     header: "Phone",
-    enableColumnFilter: true,
-  }),
-  columnHelper.accessor("ethAddress", {
-    header: "Wallet",
     enableColumnFilter: true,
   }),
   columnHelper.accessor("createdAt", {

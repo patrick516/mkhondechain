@@ -40,25 +40,22 @@ router.patch(
     try {
       const result = await savings.approveAndDisburseLoan(
         req.params.transactionId,
-        req.admin.id,
+        req.admin,
       );
       res.status(200).json(result);
     } catch (err) {
       logger.error("API_LOAN_APPROVE_ERROR", { error: err.message });
-      res.status(400).json({ error: err.message });
+      const status = err.message === "ACCESS_DENIED" ? 403 : 400;
+      res.status(status).json({
+        error: err.message === "ACCESS_DENIED" ? "Access denied" : err.message,
+      });
     }
   },
 );
 
 // Reject a pending loan
 router.post("/reject", requireGroupAccess, async (req, res) => {
-  try {
-    const result = await savings.rejectLoan(req, res);
-    // Note: rejectLoan in savingsController expects (req, res) signature
-  } catch (err) {
-    logger.error("API_LOAN_REJECT_ERROR", { error: err.message });
-    res.status(400).json({ error: err.message });
-  }
+  await savings.rejectLoan(req, res);
 });
 
 module.exports = router;

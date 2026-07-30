@@ -1,21 +1,17 @@
-// ─────────────────────────────────────────────────────────────
 // MkhondeChain Server
-// Secure, production-ready Express server.
-// ─────────────────────────────────────────────────────────────
 
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const mongoSanitize = require("express-mongo-sanitize");
 const hpp = require("hpp");
-const mongoose = require("mongoose");
+const prisma = require("./utils/prismaClient");
 const socketIo = require("socket.io");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
-// require("./services/cronJobs");
+require("./services/cronJobs");
 
 const logger = require("./utils/logger");
 
@@ -25,9 +21,8 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-// ─────────────────────────────────────────────────────────────
 // Route Imports
-// ─────────────────────────────────────────────────────────────
+
 const authRoutes = require("./routes/authRoutes");
 const ussdRoutes = require("./routes/ussdRoutes");
 
@@ -36,26 +31,46 @@ const memberRoutes = require("./routes/memberRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const groupRoutes = require("./routes/groupRoutes");
+const cycleRoutes = require("./routes/cycleRoutes");
+const payoutRoutes = require("./routes/payoutRoutes");
 const auditRoute = require("./routes/auditRoute");
+const paymentWebhookRoutes = require("./routes/paymentWebhookRoutes");
+const disputeRoutes = require("./routes/disputeRoutes");
 
 const auth = require("./middleware/auth");
 
-// ─────────────────────────────────────────────────────────────
-// App & Server Setup
-// ─────────────────────────────────────────────────────────────
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:5173",
+  "http://localhost:5174",
+];
 
-// ─────────────────────────────────────────────────────────────
-// Security Middleware
-// ─────────────────────────────────────────────────────────────
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      logger.warn("CORS_BLOCKED", { origin });
+      callback(new Error(`CORS policy: origin ${origin} not allowed`));
+    }
+  },
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 // Helmet: security headers
 app.use(helmet());
 
 // Rate limiting: general API
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100, // limit each IP to 100 requests per windowMs
   message: { error: "Too many requests. Please try again later." },
   standardHeaders: true,
@@ -63,7 +78,6 @@ const generalLimiter = rateLimit({
 });
 app.use("/api/", generalLimiter);
 
-// Stricter rate limiting: login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -84,9 +98,6 @@ const ussdLimiter = rateLimit({
 });
 app.use("/ussd", ussdLimiter);
 
-// MongoDB sanitization: prevent NoSQL injection
-app.use(mongoSanitize());
-
 // HTTP Parameter Pollution prevention
 app.use(hpp());
 
@@ -94,32 +105,8 @@ app.use(hpp());
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: false, limit: "10kb" }));
 
-// ─────────────────────────────────────────────────────────────
-// CORS
-// ─────────────────────────────────────────────────────────────
-const allowedOrigins = [
-  process.env.FRONTEND_URL || "http://localhost:5173",
-  "http://localhost:5174",
-];
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        logger.warn("CORS_BLOCKED", { origin });
-        callback(new Error(`CORS policy: origin ${origin} not allowed`));
-      }
-    },
-    methods: ["GET", "POST", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
-);
-
-// ─────────────────────────────────────────────────────────────
 // Socket.IO
-// ─────────────────────────────────────────────────────────────
+
 const io = socketIo(server, {
   cors: {
     origin: allowedOrigins,
@@ -157,37 +144,30 @@ io.on("connection", (socket) => {
 
 app.set("io", io);
 
-// ─────────────────────────────────────────────────────────────
-// Database
-// ─────────────────────────────────────────────────────────────
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => logger.info("MONGODB_CONNECTED"))
+prisma
+  .$connect()
+  .then(() => logger.info("POSTGRES_CONNECTED"))
   .catch((err) => {
-    logger.error("MONGODB_CONNECTION_ERROR", { error: err.message });
+    logger.error("POSTGRES_CONNECTION_ERROR", { error: err.message });
     process.exit(1);
   });
 
-// ─────────────────────────────────────────────────────────────
-// Routes
-// ─────────────────────────────────────────────────────────────
-
-// Public routes
+// Public routes (no admin JWT — called by external services)
 app.use("/api/auth", authRoutes);
 app.use("/ussd", ussdRoutes);
-
+app.use("/api/payments/webhook", paymentWebhookRoutes);
 // Protected routes
-
 app.use("/api/loans", auth, loanRoutes);
 app.use("/api/members", auth, memberRoutes);
 app.use("/api/transactions", auth, transactionRoutes);
 
 app.use("/api/dashboard", auth, dashboardRoutes);
+app.use("/api/groups", auth, groupRoutes);
+app.use("/api/cycle", auth, cycleRoutes);
+app.use("/api/payouts", auth, payoutRoutes);
 app.use("/audit", auth, auditRoute);
+app.use("/api/disputes", auth, disputeRoutes);
 
-// ─────────────────────────────────────────────────────────────
-// Error Handling
-// ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   logger.error("EXPRESS_ERROR", {
     message: err.message,
@@ -208,16 +188,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────
-// 404 Handler
-// ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: "Endpoint not found." });
 });
 
-// ─────────────────────────────────────────────────────────────
-// Start Server
-// ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   logger.info("SERVER_STARTED", { port: PORT, env: process.env.NODE_ENV });

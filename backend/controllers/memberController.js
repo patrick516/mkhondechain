@@ -1,27 +1,27 @@
-// ─────────────────────────────────────────────────────────────
 // Member Controller
 // Manages savings group members.
 // Every member gets a hashed PIN for USSD authentication.
 // ─────────────────────────────────────────────────────────────
 
-const Member = require("../models/memberModel");
-const Group = require("../models/Group");
+const prisma = require("../utils/prismaClient");
 const bcrypt = require("bcrypt");
 const logger = require("../utils/logger");
 
 // GET /api/members — list members (group-scoped for admins)
 exports.getAllMembers = async (req, res) => {
   try {
-    const query = {};
+    const where = {};
 
     // Regular admins only see their group's members
     if (req.admin.role !== "superadmin" && req.admin.groupId) {
-      query.groupId = req.admin.groupId;
+      where.groupId = req.admin.groupId;
     }
 
-    const members = await Member.find(query)
-      .select("-pinHash") // NEVER return PIN hash
-      .sort({ createdAt: -1 });
+    const members = await prisma.member.findMany({
+      where,
+      omit: { pinHash: true }, // NEVER return PIN hash
+      orderBy: { createdAt: "desc" },
+    });
 
     res.status(200).json(members);
   } catch (error) {
@@ -36,13 +36,16 @@ exports.getAllMembers = async (req, res) => {
 // GET /api/members/:id — single member details
 exports.getMember = async (req, res) => {
   try {
-    const query = { _id: req.params.id };
+    const where = { id: req.params.id };
 
     if (req.admin.role !== "superadmin" && req.admin.groupId) {
-      query.groupId = req.admin.groupId;
+      where.groupId = req.admin.groupId;
     }
 
-    const member = await Member.findOne(query).select("-pinHash");
+    const member = await prisma.member.findFirst({
+      where,
+      omit: { pinHash: true },
+    });
     if (!member) {
       return res.status(404).json({ error: "Member not found" });
     }
@@ -59,12 +62,29 @@ exports.getMember = async (req, res) => {
 
 // POST /api/members — add new member
 exports.addMember = async (req, res) => {
-  const { firstName, surname, gender, phone, pin, groupId } = req.body;
+  const { firstName, surname, gender, phone, pin } = req.body;
+
+  // Determine target group: regular admins can ONLY add members to their
+  // own group — groupId is never trusted from the client for them.
+  // Only superadmin may specify a groupId explicitly in the request.
+  let groupId = req.admin.groupId;
+  if (req.admin.role === "superadmin") {
+    groupId = req.body.groupId;
+  }
 
   // Validation
-  if (!firstName || !surname || !phone || !pin || !groupId) {
+  if (!firstName || !surname || !phone || !pin) {
     return res.status(400).json({
-      error: "First name, surname, phone, PIN, and group ID are required",
+      error: "First name, surname, phone, and PIN are required",
+    });
+  }
+
+  if (!groupId) {
+    return res.status(400).json({
+      error:
+        req.admin.role === "superadmin"
+          ? "Group ID is required"
+          : "Your account is not linked to a group. Contact the superadmin.",
     });
   }
 
@@ -76,56 +96,45 @@ exports.addMember = async (req, res) => {
     });
   }
 
-  // Validate PIN (4-6 digits)
-  const pinRegex = /^\d{4,6}$/;
+  // Validate PIN (exactly 4 digits)
+  const pinRegex = /^\d{4}$/;
   if (!pinRegex.test(pin)) {
     return res.status(400).json({
-      error: "PIN must be 4-6 digits",
+      error: "PIN must be exactly 4 digits",
     });
-  }
-
-  // Validate group exists and admin has access
-  const group = await Group.findById(groupId);
-  if (!group) {
-    return res.status(404).json({ error: "Group not found" });
-  }
-
-  if (
-    req.admin.role !== "superadmin" &&
-    req.admin.groupId &&
-    req.admin.groupId.toString() !== groupId
-  ) {
-    return res
-      .status(403)
-      .json({ error: "You can only add members to your own group" });
   }
 
   try {
+    // Validate group exists and admin has access
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) {
+      return res.status(404).json({ error: "Group not found" });
+    }
+
     // Hash PIN
     const pinHash = await bcrypt.hash(pin, 12);
 
-    const newMember = await Member.create({
-      firstName: firstName.trim(),
-      surname: surname.trim(),
-      gender,
-      phone,
-      pinHash,
-      groupId,
-      status: "active",
+    const newMember = await prisma.member.create({
+      data: {
+        firstName: firstName.trim(),
+        surname: surname.trim(),
+        gender,
+        phone,
+        pinHash,
+        groupId,
+        status: "active",
+      },
+      omit: { pinHash: true },
     });
 
     logger.info("MEMBER_CREATED", {
-      memberId: newMember._id,
+      memberId: newMember.id,
       phone: newMember.phone,
       groupId: newMember.groupId,
       admin: req.admin.username,
     });
 
-    // Return member without pinHash
-    const memberResponse = newMember.toObject();
-    delete memberResponse.pinHash;
-
-    res.status(201).json(memberResponse);
+    res.status(201).json(newMember);
   } catch (error) {
     logger.error("ADD_MEMBER_ERROR", {
       error: error.message,
@@ -133,7 +142,7 @@ exports.addMember = async (req, res) => {
       admin: req.admin.username,
     });
 
-    if (error.code === 11000) {
+    if (error.code === "P2002") {
       return res.status(400).json({
         error: "A member with this phone number already exists.",
       });
@@ -146,44 +155,48 @@ exports.addMember = async (req, res) => {
 exports.updateMember = async (req, res) => {
   try {
     const { firstName, surname, gender, status, groupId } = req.body;
-    const query = { _id: req.params.id };
+    const where = { id: req.params.id };
 
     if (req.admin.role !== "superadmin" && req.admin.groupId) {
-      query.groupId = req.admin.groupId;
+      where.groupId = req.admin.groupId;
     }
 
-    const member = await Member.findOne(query);
+    const member = await prisma.member.findFirst({ where });
     if (!member) {
       return res.status(404).json({ error: "Member not found" });
     }
 
-    // Update allowed fields
-    if (firstName) member.firstName = firstName.trim();
-    if (surname) member.surname = surname.trim();
-    if (gender) member.gender = gender;
+    // Build the update payload from allowed fields
+    const data = {};
+    if (firstName) data.firstName = firstName.trim();
+    if (surname) data.surname = surname.trim();
+    if (gender) data.gender = gender;
     if (status && ["active", "suspended", "left"].includes(status)) {
-      member.status = status;
+      data.status = status;
     }
     if (groupId && req.admin.role === "superadmin") {
-      const group = await Group.findById(groupId);
-      if (!group) {
+      const targetGroup = await prisma.group.findUnique({
+        where: { id: groupId },
+      });
+      if (!targetGroup) {
         return res.status(404).json({ error: "Target group not found" });
       }
-      member.groupId = groupId;
+      data.groupId = groupId;
     }
 
-    await member.save();
+    const updatedMember = await prisma.member.update({
+      where: { id: member.id },
+      data,
+      omit: { pinHash: true },
+    });
 
     logger.info("MEMBER_UPDATED", {
-      memberId: member._id,
+      memberId: updatedMember.id,
       admin: req.admin.username,
       changes: Object.keys(req.body),
     });
 
-    const memberResponse = member.toObject();
-    delete memberResponse.pinHash;
-
-    res.status(200).json(memberResponse);
+    res.status(200).json(updatedMember);
   } catch (error) {
     logger.error("UPDATE_MEMBER_ERROR", {
       error: error.message,
@@ -196,13 +209,13 @@ exports.updateMember = async (req, res) => {
 // DELETE /api/members/:id — soft delete (mark as left)
 exports.deleteMember = async (req, res) => {
   try {
-    const query = { _id: req.params.id };
+    const where = { id: req.params.id };
 
     if (req.admin.role !== "superadmin" && req.admin.groupId) {
-      query.groupId = req.admin.groupId;
+      where.groupId = req.admin.groupId;
     }
 
-    const member = await Member.findOne(query);
+    const member = await prisma.member.findFirst({ where });
     if (!member) {
       return res.status(404).json({ error: "Member not found" });
     }
@@ -214,18 +227,20 @@ exports.deleteMember = async (req, res) => {
       });
     }
 
-    member.status = "left";
-    await member.save();
+    await prisma.member.update({
+      where: { id: member.id },
+      data: { status: "left" },
+    });
 
     logger.info("MEMBER_DELETED", {
-      memberId: member._id,
+      memberId: member.id,
       phone: member.phone,
       admin: req.admin.username,
     });
 
     res
       .status(200)
-      .json({ message: "Member marked as left", memberId: member._id });
+      .json({ message: "Member marked as left", memberId: member.id });
   } catch (error) {
     logger.error("DELETE_MEMBER_ERROR", {
       error: error.message,
@@ -240,22 +255,26 @@ exports.resetPin = async (req, res) => {
   try {
     const { newPin } = req.body;
 
-    if (!newPin || !/^\d{4,6}$/.test(newPin)) {
-      return res.status(400).json({ error: "PIN must be 4-6 digits" });
+    if (!newPin || !/^\d{4}$/.test(newPin)) {
+      return res.status(400).json({ error: "PIN must be exactly 4 digits" });
     }
-
-    const query = { _id: req.params.id };
+    const where = { id: req.params.id };
     if (req.admin.role !== "superadmin" && req.admin.groupId) {
-      query.groupId = req.admin.groupId;
+      where.groupId = req.admin.groupId;
     }
 
-    const member = await Member.findOne(query);
+    const member = await prisma.member.findFirst({ where });
     if (!member) {
       return res.status(404).json({ error: "Member not found" });
     }
 
-    member.pinHash = await bcrypt.hash(newPin, 12);
-    await member.save();
+    const pinHash = await bcrypt.hash(newPin, 12);
+    await prisma.member.update({
+      where: { id: member.id },
+      // A leader-initiated reset also forces a change on next login —
+      // same security reasoning as a brand-new member's initial PIN.
+      data: { pinHash, mustChangePin: true },
+    });
 
     // Notify member via SMS
     const sendSms = require("../utils/africasTalkingSms");
@@ -267,7 +286,7 @@ exports.resetPin = async (req, res) => {
     );
 
     logger.info("MEMBER_PIN_RESET", {
-      memberId: member._id,
+      memberId: member.id,
       admin: req.admin.username,
     });
 
