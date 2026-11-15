@@ -1076,3 +1076,18 @@
 {"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/","service":"mkhondechain","timestamp":"2026-07-30 21:14:45","token":"present"}
 {"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/","service":"mkhondechain","timestamp":"2026-07-30 21:14:45","token":"present"}
 {"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/","service":"mkhondechain","timestamp":"2026-07-30 21:14:45","token":"present"}
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-08-07 14:03:16"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-08-07 14:03:16"}
+{"level":"info","message":"POSTGRES_CONNECTED","service":"mkhondechain","timestamp":"2026-08-07 14:03:17"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/analytics","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/stats","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/reconciliation-config","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/platform-fees","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/stats","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/reconciliation-config","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/platform-fees","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/analytics","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"admin":"chair99","ip":"::1","level":"info","message":"LOGIN_SUCCESS","service":"mkhondechain","timestamp":"2026-08-07 14:11:21"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_67a3c95fd18ba0d25bf161c0e6a93cec","text":"","timestamp":"2026-08-07 14:12:08"}
+{"admin":"pkulinji","ip":"::1","level":"info","message":"LOGIN_SUCCESS","service":"mkhondechain","timestamp":"2026-08-07 14:16:54"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_60f73fbcf770020fbd98e31db6ce9f94","text":"","timestamp":"2026-08-07 14:23:38"}

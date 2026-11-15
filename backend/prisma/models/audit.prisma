@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────
-// File: backend/prisma/models/audit.prisma
-// ─────────────────────────────────────────────────────────────
+
 // Audit Model
 // Immutable security and compliance log.
 // Every admin action and system event is recorded here.

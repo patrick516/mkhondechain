@@ -764,3 +764,11 @@
 {"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/","service":"mkhondechain","timestamp":"2026-07-30 21:14:45","token":"present"}
 {"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/","service":"mkhondechain","timestamp":"2026-07-30 21:14:45","token":"present"}
 {"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/","service":"mkhondechain","timestamp":"2026-07-30 21:14:45","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/analytics","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/stats","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/reconciliation-config","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/platform-fees","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/stats","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/reconciliation-config","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/platform-fees","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
+{"ip":"::1","level":"warn","message":"UNAUTHORIZED_ACCESS","path":"/analytics","service":"mkhondechain","timestamp":"2026-08-07 14:11:05","token":"present"}
