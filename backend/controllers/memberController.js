@@ -5,7 +5,51 @@
 
 const prisma = require("../utils/prismaClient");
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const logger = require("../utils/logger");
+const sendSms = require("../utils/africasTalkingSms");
+
+// PINs in this list are never issued as starting PINs — they are the first
+// codes anyone would guess.
+const BLOCKED_PINS = new Set([
+  "0000",
+  "1111",
+  "2222",
+  "3333",
+  "4444",
+  "5555",
+  "6666",
+  "7777",
+  "8888",
+  "9999",
+  "1234",
+  "4321",
+  "2580",
+]);
+
+// Cryptographically random 4-digit starting PIN.
+function generateStartingPin() {
+  let pin;
+  do {
+    pin = String(crypto.randomInt(0, 10000)).padStart(4, "0");
+  } while (BLOCKED_PINS.has(pin));
+  return pin;
+}
+
+// Welcome SMS: branding, group, member name, the starting PIN, and a
+// Chichewa call to save. Contains a PIN, so it is never logged.
+function buildWelcomeSms({ firstName, surname, groupName, pin }) {
+  const name = `${firstName} ${surname}`.trim();
+  return (
+    `MkhondeChain\n` +
+    `Moni ${name}! Takukondweretsani ku gulu la ${groupName}.\n` +
+    `Welcome to ${groupName}.\n\n` +
+    `PIN yanu / Your PIN: ${pin}\n\n` +
+    `Gwiritsani ntchito PIN iyi pa *XXX# kenako isinthe yoyamba.\n` +
+    `Use this PIN at *XXX#, then change it the first time.\n` +
+    `Yambani kusunga ndalama zanu mosavuta!`
+  );
+}
 
 // GET /api/members — list members (group-scoped for admins)
 exports.getAllMembers = async (req, res) => {
@@ -62,7 +106,8 @@ exports.getMember = async (req, res) => {
 
 // POST /api/members — add new member
 exports.addMember = async (req, res) => {
-  const { firstName, surname, gender, phone, pin } = req.body;
+  const { firstName, surname, gender, phone } = req.body;
+  const requestedPin = req.body.pin;
 
   // Determine target group: regular admins can ONLY add members to their
   // own group — groupId is never trusted from the client for them.
@@ -73,9 +118,9 @@ exports.addMember = async (req, res) => {
   }
 
   // Validation
-  if (!firstName || !surname || !phone || !pin) {
+  if (!firstName || !surname || !phone) {
     return res.status(400).json({
-      error: "First name, surname, phone, and PIN are required",
+      error: "First name, surname, and phone are required",
     });
   }
 
@@ -96,12 +141,17 @@ exports.addMember = async (req, res) => {
     });
   }
 
-  // Validate PIN (exactly 4 digits)
-  const pinRegex = /^\d{4}$/;
-  if (!pinRegex.test(pin)) {
-    return res.status(400).json({
-      error: "PIN must be exactly 4 digits",
-    });
+  // PIN: the caller MAY supply one (exactly 4 digits); otherwise a random
+  // 4-digit starting PIN is generated here and delivered to the member by SMS.
+  let pin = requestedPin;
+  if (pin !== undefined && pin !== null && pin !== "") {
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(400).json({
+        error: "PIN must be exactly 4 digits",
+      });
+    }
+  } else {
+    pin = generateStartingPin();
   }
 
   try {
@@ -134,7 +184,43 @@ exports.addMember = async (req, res) => {
       admin: req.admin.username,
     });
 
-    res.status(201).json(newMember);
+    // Welcome SMS with the starting PIN. Failure must never roll back the
+    // member — the PIN is disclosed to the leader below instead.
+    let smsDelivered = false;
+    try {
+      const smsResult = await sendSms(
+        newMember.phone,
+        buildWelcomeSms({
+          firstName: newMember.firstName,
+          surname: newMember.surname,
+          groupName: group.name,
+          pin,
+        }),
+      );
+      smsDelivered = Boolean(smsResult?.success);
+    } catch (smsErr) {
+      logger.error("MEMBER_WELCOME_SMS_FAILED", {
+        memberId: newMember.id,
+        phone: newMember.phone,
+        error: smsErr.message,
+      });
+    }
+
+    if (!smsDelivered) {
+      logger.warn("MEMBER_WELCOME_SMS_NOT_DELIVERED", {
+        memberId: newMember.id,
+        phone: newMember.phone,
+        admin: req.admin.username,
+      });
+    }
+
+    res.status(201).json({
+      ...newMember,
+      smsDelivered,
+      // Only when the SMS could not be delivered, so the leader can hand the
+      // starting PIN to the member in person instead of leaving them stranded.
+      ...(smsDelivered ? {} : { pin }),
+    });
   } catch (error) {
     logger.error("ADD_MEMBER_ERROR", {
       error: error.message,
@@ -277,7 +363,6 @@ exports.resetPin = async (req, res) => {
     });
 
     // Notify member via SMS
-    const sendSms = require("../utils/africasTalkingSms");
     await sendSms(
       member.phone,
       `MkhondeChain: PIN yanu yasinthidwa. / Your PIN has been reset.\n` +

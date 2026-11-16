@@ -30,7 +30,9 @@ export interface MemberPayload {
   surname: string;
   phone: string;
   gender: string;
-  pin: string;
+  // Optional — when omitted the backend generates a random 4-digit
+  // starting PIN and delivers it to the member by SMS.
+  pin?: string;
 }
 
 export interface AuditLogItem {

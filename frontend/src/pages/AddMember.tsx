@@ -7,7 +7,6 @@ export default function AddMember() {
   const [surname, setSurname] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
-  const [pin, setPin] = useState("");
   const [groupId, setGroupId] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,11 +20,6 @@ export default function AddMember() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!pin || pin.length < 4 || pin.length > 6) {
-      toast.error("PIN must be 4-6 digits");
-      return;
-    }
 
     if (!groupId) {
       toast.error("Please enter a group ID");
@@ -41,18 +35,31 @@ export default function AddMember() {
         surname: surname.trim(),
         phone: formattedPhone,
         gender,
-        pin,
         groupId,
       });
 
-      toast.success(
-        `Member ${res.data.firstName} ${res.data.surname} added successfully!`,
-      );
+      const { smsDelivered, pin: fallbackPin } = res.data;
+
+      if (smsDelivered) {
+        toast.success(
+          `Member ${res.data.firstName} ${res.data.surname} added! Their starting PIN was sent by SMS to ${formattedPhone}.`,
+        );
+      } else {
+        toast.success(
+          `Member ${res.data.firstName} ${res.data.surname} added.`,
+        );
+        if (fallbackPin) {
+          toast.error(
+            `PIN SMS could NOT be delivered. Tell them their starting PIN is ${fallbackPin} — they must change it on first dial.`,
+            { duration: 15000 },
+          );
+        }
+      }
+
       setFirstName("");
       setSurname("");
       setPhone("");
       setGender("");
-      setPin("");
       setGroupId("");
     } catch (error: any) {
       const message = error?.response?.data?.error || "Failed to add member";
@@ -119,23 +126,11 @@ export default function AddMember() {
             />
           </div>
 
-          <div>
-            <label className="block mb-1 text-sm font-medium">
-              USSD PIN (4-6 digits)
-            </label>
-            <input
-              type="password"
-              maxLength={6}
-              className="w-full p-2 border rounded"
-              placeholder="e.g. 1234"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Member will use this PIN to authenticate USSD transactions
-            </p>
-          </div>
+          <p className="p-2 text-xs text-gray-600 border rounded bg-gray-50">
+            A random 4-digit starting PIN is generated automatically and sent to
+            the member by SMS with the group name. The member must change it the
+            first time they dial in.
+          </p>
 
           <div>
             <label className="block mb-1 text-sm font-medium">Group ID</label>

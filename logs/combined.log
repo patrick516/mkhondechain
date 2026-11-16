@@ -1091,3 +1091,27 @@
 {"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_67a3c95fd18ba0d25bf161c0e6a93cec","text":"","timestamp":"2026-08-07 14:12:08"}
 {"admin":"pkulinji","ip":"::1","level":"info","message":"LOGIN_SUCCESS","service":"mkhondechain","timestamp":"2026-08-07 14:16:54"}
 {"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_60f73fbcf770020fbd98e31db6ce9f94","text":"","timestamp":"2026-08-07 14:23:38"}
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-11-16 12:21:13"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-11-16 12:21:13"}
+{"level":"info","message":"POSTGRES_CONNECTED","service":"mkhondechain","timestamp":"2026-11-16 12:21:13"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_b2e7b567b777ceecce57c0cbcae87f56","text":"","timestamp":"2026-11-16 12:38:47"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_b2e7b567b777ceecce57c0cbcae87f56","text":"4321","timestamp":"2026-11-16 12:39:06"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_b2e7b567b777ceecce57c0cbcae87f56","text":"4321*4321","timestamp":"2026-11-16 12:39:16"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_b04a88b29ea20f4c8f91b0f6b17afe7e","text":"","timestamp":"2026-11-16 12:39:21"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_b04a88b29ea20f4c8f91b0f6b17afe7e","text":"1234","timestamp":"2026-11-16 12:39:27"}
+{"ip":"::1","level":"info","message":"USSD_REQUEST","phoneNumber":"+265995049331","service":"mkhondechain","sessionId":"ATUid_a756acaa907e73d879dd3fd7b4e5c48d","text":"","timestamp":"2026-11-16 12:44:10"}
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-11-16 13:14:10"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-11-16 13:14:10"}
+{"level":"info","message":"POSTGRES_CONNECTED","service":"mkhondechain","timestamp":"2026-11-16 13:14:10"}
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-11-16 13:14:23"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-11-16 13:14:23"}
+{"level":"info","message":"POSTGRES_CONNECTED","service":"mkhondechain","timestamp":"2026-11-16 13:14:23"}
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-11-16 13:14:28"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-11-16 13:14:28"}
+{"level":"info","message":"POSTGRES_CONNECTED","service":"mkhondechain","timestamp":"2026-11-16 13:14:29"}
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-11-16 13:16:07"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-11-16 13:16:08"}
+{"level":"info","message":"POSTGRES_CONNECTED","service":"mkhondechain","timestamp":"2026-11-16 13:16:08"}
+{"level":"info","message":"PAYMENT_GATEWAY_LOADED","provider":"Mock Airtel Money","service":"mkhondechain","timestamp":"2026-11-16 13:18:18"}
+{"env":"development","level":"info","message":"SERVER_STARTED","port":"4000","service":"mkhondechain","timestamp":"2026-11-16 13:18:18"}
+{"level":"info","message":"POSTGRES_CONNECTED","service":"mkhondechain","timestamp":"2026-11-16 13:18:18"}

@@ -18,9 +18,6 @@ export default function Members() {
   const [showModal, setShowModal] = useState(false);
 
   // Form states
-
-  // Form states
-  const DEFAULT_PIN = "1234";
   const [firstName, setFirstName] = useState("");
   const [surname, setSurname] = useState("");
   const [phone, setPhone] = useState("");
@@ -70,15 +67,32 @@ export default function Members() {
         surname,
         phone: formattedPhone,
         gender,
-        pin: DEFAULT_PIN,
       };
 
       const res = await axios.post("/members", payload);
-      console.log("Members from API:", res.data);
+      const { smsDelivered, pin: fallbackPin } = res.data;
 
-      toast.success(
-        `Member added! Tell them their starting PIN is ${DEFAULT_PIN} — they'll be asked to change it the first time they dial in.`,
-      );
+      if (smsDelivered) {
+        toast.success(
+          `Member added! Their starting PIN was sent by SMS to ${formattedPhone} — they'll be asked to change it the first time they dial in.`,
+        );
+      } else {
+        // SMS gateway failed: surface the generated PIN once so the leader can
+        // hand it to the member in person instead of leaving them stranded.
+        toast.success("Member added.");
+        if (fallbackPin) {
+          toast.error(
+            `PIN SMS could NOT be delivered. Tell ${firstName} their starting PIN is ${fallbackPin} — they must change it on first dial.`,
+            { duration: 15000 },
+          );
+        } else {
+          toast.error(
+            `PIN SMS could NOT be delivered to ${formattedPhone}. Use Reset PIN once the gateway is back.`,
+            { duration: 15000 },
+          );
+        }
+      }
+
       setShowModal(false);
       setFirstName("");
       setSurname("");
@@ -208,17 +222,11 @@ export default function Members() {
                 placeholder="Phone Number"
                 required
               />
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Starting PIN (member changes this on first USSD login)
-                </label>
-                <input
-                  className="w-full p-2 border rounded bg-gray-50 text-gray-500"
-                  value={DEFAULT_PIN}
-                  readOnly
-                  disabled
-                />
-              </div>
+              <p className="p-2 text-xs text-gray-600 border rounded bg-gray-50">
+                A random 4-digit starting PIN is generated automatically and
+                sent to the member by SMS, together with the group name. The
+                member must change it the first time they dial in.
+              </p>
               <div className="flex items-center justify-between">
                 <button
                   className="px-4 py-2 text-white rounded bg-primary"
